@@ -1,7 +1,7 @@
 # 🏥 UMLS Concept Lookup API
 
-### 🚀 **Quick Start: Search for Medical Terms**
 ## Using the EC2 on 52.43.228.165
+### 🚀 **Quick Start: Search for Medical Terms**
 If using the preset UMLS server on [ec2 instance](https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#InstanceDetails:instanceId=i-02871ce2788a7a8c2) on IP 52.43.228.165, your-ec2-public-ip = 52.43.228.165. 
 Ensure you are on the Geneial VPN to be able to connect. 
 Ensure that the EC2 is on while in use and off when not in use!!
