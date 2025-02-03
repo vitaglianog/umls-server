@@ -14,7 +14,7 @@ cd umls-server/umls_api
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-To search for HPO or NCIT concepts related to a term:
+To search for related to a term (e.g. "cancer") in a specific ontology (e.g. "HPO" or "NCI"):
 ```sh
 curl "http://your-ec2-public-ip:8000/terms?search=cancer&ontology=HPO"
 
@@ -44,7 +44,7 @@ curl "http://your-ec2-public-ip:8000/concepts/HP:0002896"
 ## 🌐 **API Endpoints**
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET`  | `/terms?search={term}&ontology={ontology}` | Search for a term (Default: `HPO` or `NCI`) |
+| `GET`  | `/terms?search={term}&ontology={ontology}` | Search for a term (Default: `HPO`) |
 | `GET`  | `/concepts/{cui}` | Get concept details by CUI |
 
 ---
