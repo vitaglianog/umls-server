@@ -1,48 +1,4 @@
-from fastapi import FastAPI
-import pymysql
-from dotenv import load_dotenv
-import os
-
-# Load environment variables
-load_dotenv()
-
-app = FastAPI()
-
-def connect_db():
-    return pymysql.connect(
-        host=os.getenv("DB_HOST"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME"),
-        cursorclass=pymysql.cursors.DictCursor
-    )
-
-# @app.get("/search/{term}")
-# def search_umls(term: str):
-#     conn = connect_db()
-#     cursor = conn.cursor()
-
-#     # Search for the term in MRCONSO (Case-insensitive)
-#     query = """
-#         SELECT CUI, STR, SAB, LAT 
-#         FROM MRCONSO 
-#         WHERE STR LIKE %s 
-#         AND LAT = 'ENG' 
-#         LIMIT 10;
-#     """
-    
-#     cursor.execute(query, (f"%{term}%",))
-#     results = cursor.fetchall()
-    
-#     cursor.close()
-#     conn.close()
-    
-#     return {"results": results}
-
-
-# Processing code based on Saidie's original code in https://github.com/geneialco/arpa-h/blob/main/mapping/ontology_mapping/local_query.py
-
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import pymysql
 from dotenv import load_dotenv
 import os
@@ -67,9 +23,9 @@ def clean_html(html_text):
     """Remove HTML tags from text."""
     return BeautifulSoup(html_text, "html.parser").get_text() if html_text else None
 
-@app.get("/query/{search_term}")
-def query_umls(search_term: str, ontology_abbreviation: str = "HPO"):
-    """Search for HPO/NCIT codes matching a medical term."""
+@app.get("/terms")
+def search_terms(search: str, ontology: str = "HPO"):
+    """Search for medical terms in UMLS based on ontology."""
     conn = connect_db()
     query = """
         SELECT DISTINCT MRCONSO.CODE, MRCONSO.STR, MRDEF.DEF
@@ -82,19 +38,17 @@ def query_umls(search_term: str, ontology_abbreviation: str = "HPO"):
 
     try:
         with conn.cursor() as cursor:
-            cursor.execute(query, (ontology_abbreviation, f"%{search_term}%"))
+            cursor.execute(query, (ontology, f"%{search}%"))
             results = cursor.fetchall()
 
-            # Process and clean results
             formatted_results = []
-            seen_codes = set()  # To avoid duplicates
+            seen_codes = set()
 
             for row in results:
                 code = row["CODE"]
                 term = row["STR"]
                 description = clean_html(row["DEF"])
 
-                # Avoid duplicates
                 if code not in seen_codes:
                     formatted_results.append({"code": code, "term": term, "description": description})
                     seen_codes.add(code)
@@ -102,4 +56,36 @@ def query_umls(search_term: str, ontology_abbreviation: str = "HPO"):
     finally:
         conn.close()
 
+    if not formatted_results:
+        raise HTTPException(status_code=404, detail="No results found")
+
     return {"results": formatted_results}
+
+@app.get("/concepts/{cui}")
+def get_concept(cui: str):
+    """Fetch details for a specific CUI."""
+    conn = connect_db()
+    query = """
+        SELECT MRCONSO.CODE, MRCONSO.STR, MRDEF.DEF
+        FROM MRCONSO
+        LEFT JOIN MRDEF ON MRCONSO.CUI = MRDEF.CUI
+        WHERE MRCONSO.CODE = %s
+        LIMIT 1;
+    """
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (cui,))
+            result = cursor.fetchone()
+
+    finally:
+        conn.close()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"No concept found for CUI {cui}")
+
+    return {
+        "code": result["CODE"],
+        "term": result["STR"],
+        "description": clean_html(result["DEF"])
+    }
