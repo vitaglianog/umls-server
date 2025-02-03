@@ -1,13 +1,26 @@
 # 🏥 UMLS Concept Lookup API
 
 ### 🚀 **Quick Start: Search for Medical Terms**
-If using the preset UMLS server on ec2 instance on IP 52.43.228.165, your-ec2-public-ip = 52.43.228.165 
+## Using the EC2 on 52.43.228.165
+If using the preset UMLS server on [ec2 instance](https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#InstanceDetails:instanceId=i-02871ce2788a7a8c2) on IP 52.43.228.165, your-ec2-public-ip = 52.43.228.165. 
+Ensure you are on the Geneial VPN to be able to connect. 
+Ensure that the EC2 is on while in use and off when not in use!!
+
+To run the API from the pre-installed EC2 instance: 
+First, ssh into the  EC2 (ask Julie for .pem file), then run the app.
+```sh
+ssh -i "umls-server.pem" ec2-user@ec2-52-43-228-165.us-west-2.compute.amazonaws.com
+cd umls-server/umls_api
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
 
 To search for HPO or NCIT concepts related to a term:
 ```sh
 curl "http://your-ec2-public-ip:8000/terms?search=cancer&ontology=HPO"
 
 ```
+OR you can use the python requests library. 
+
 Example Response:
 ```json
 {
@@ -61,8 +74,8 @@ curl "http://your-ec2-public-ip:8000/concepts/HP:0002896"
 ---
 
 ## 🛠 **Troubleshooting**
-- **API not accessible?** Open port **8000** in your EC2 **Security Group**.  
-- **No results found?** Ensure your **ontology (`HPO`, `NCIT`)** is correct.  
+- **API not accessible?** Make sure EC2 is on and open port **8000** in your EC2 **Security Group**.  
+- **No results found?** Ensure your **ontology (`HPO`, `NCI`, etc.)** is correct.  
 - **API stops when logging out?** Run:
   ```sh
   nohup uvicorn app:app --host 0.0.0.0 --port 8000 > umls_api.log 2>&1 &
