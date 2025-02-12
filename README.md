@@ -4,7 +4,9 @@
 ### 🚀 **Quick Start: Search for Medical Terms**
 If using the preset UMLS server on [ec2 instance](https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#InstanceDetails:instanceId=i-02871ce2788a7a8c2) on IP 52.43.228.165, your-ec2-public-ip = 52.43.228.165. 
 Ensure you are on the Geneial VPN to be able to connect. 
-Ensure that the EC2 is on while in use and off when not in use!!
+Ensure that the EC2 is on while in use and off when not in use (it seems to cost ~50c an hour)!!
+
+UPDATE 2/7: When the instance is on, the UMLS server should automatically turn on. The server will shut down automatically at midnight ET every night.  
 
 To run the API from the pre-installed EC2 instance: 
 First, ssh into the  EC2 (ask Julie for .pem file), then run the app.
