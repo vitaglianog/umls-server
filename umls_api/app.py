@@ -148,19 +148,51 @@ def get_depth(cui: str):
 
 @app.get("/cuis/{cui}/ancestors", summary="Get all ancestors of a CUI")
 def get_ancestors(cui: str):
-    """ Retrieve all ancestors of a CUI from MRHIER. """
-    sql = "SELECT PTR FROM MRHIER WHERE CUI = %s"
+    """ Retrieve all ancestors of a CUI by extracting AUIs from MRHIER.PTR and mapping them to CUIs via MRCONSO. """
+    
+    # Step 1: Retrieve the AUI paths (PTR) from MRHIER
+    sql_get_ptr = "SELECT PTR FROM MRHIER WHERE CUI = %s"
 
-    with connect_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(sql, (cui,))
-            result = cursor.fetchone()
+    try:
+        with connect_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_get_ptr, (cui,))
+                results = cursor.fetchall()
 
-    if not result or not result["PTR"]:
-        raise HTTPException(status_code=404, detail="No ancestors found")
+        if not results:
+            raise HTTPException(status_code=404, detail=f"No ancestors found for CUI {cui}")
 
-    ancestors = result["PTR"].split(".")[:-1]  # Remove self
-    return {"cui": cui, "ancestors": ancestors}
+        # Step 2: Extract AUIs from PTR and map them to CUIs
+        auis = set()
+        for row in results:
+            ptr_path = row["PTR"]
+            if ptr_path:
+                auis.update(ptr_path.split("."))  # Extract AUIs from dot-separated paths
+
+        if not auis:
+            return {"cui": cui, "ancestors": []}  # No ancestors found
+
+        # Step 3: Map AUIs to CUIs using MRCONSO
+        sql_map_aui_to_cui = """
+            SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s
+        """
+
+        with connect_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_map_aui_to_cui, (tuple(auis),))
+                mappings = cursor.fetchall()
+
+        # Convert AUIs to CUIs
+        aui_to_cui = {m["AUI"]: m["CUI"] for m in mappings}
+        ancestors_cuis = {aui_to_cui[aui] for aui in auis if aui in aui_to_cui}
+
+        return {"cui": cui, "ancestors": list(ancestors_cuis)}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
 
 
 
@@ -182,24 +214,33 @@ def get_cui_from_ontology(source: str, code: str):
 @app.get("/cuis/{cui1}/{cui2}/lca", summary="Get the lowest common ancestor of two CUIs")
 def find_lowest_common_ancestor(cui1: str, cui2: str):
     """ Find the lowest common ancestor (LCA) of two CUIs. """
-    ancestors1 = set(get_ancestors(cui1)['ancestors'])
-    ancestors2 = set(get_ancestors(cui2)['ancestors'])
 
-    common_ancestors = ancestors1 & ancestors2  # Find intersection
+    try:
+        # Step 1: Get ancestors for both CUIs
+        ancestors1 = set(get_ancestors(cui1)["ancestors"])
+        ancestors2 = set(get_ancestors(cui2)["ancestors"])
 
-    if not common_ancestors:
-        raise HTTPException(status_code=404, detail="No common ancestor found")
+        # Step 2: Find common ancestors
+        common_ancestors = ancestors1 & ancestors2  # Intersection
 
-    # Find the LCA with the maximum depth (most specific common ancestor)
-    def depth_calc(cui):
-        try: 
-            get_depth(cui)["depth"]
-        except:
-            return 0
+        if not common_ancestors:
+            raise HTTPException(status_code=404, detail="No common ancestor found")
 
-    lca = max(common_ancestors, key=lambda cui: depth_calc(cui))
-    
-    return {"cui1": cui1, "cui2": cui2, "lca": lca}
+        # Step 3: Find LCA with the maximum depth
+        def get_depth_safe(cui):
+            """ Get depth, handling errors gracefully. """
+            try:
+                return get_depth(cui)["depth"]
+            except Exception:
+                return 0  # Default depth if an error occurs
+
+        lca = max(common_ancestors, key=lambda cui: get_depth_safe(cui))
+
+        return {"cui1": cui1, "cui2": cui2, "lca": lca}
+
+    except Exception as e:
+        return {"error": str(e)}
+
 
 
 
