@@ -93,7 +93,7 @@ def get_concept(cui: str):
 
 ## UMLS CUI toolkit
 @app.get("/cuis", summary="Search for CUIs by term")
-def search_cui(query: str = Query(..., description="Search term for CUI lookup")):
+def search_cui(query: str):
     """ Search for CUIs matching a given term. """
     sql = "SELECT CUI, STR FROM MRCONSO WHERE STR LIKE %s LIMIT 50"
     
@@ -107,52 +107,54 @@ def search_cui(query: str = Query(..., description="Search term for CUI lookup")
     
     return {"query": query, "cuis": [{"cui": r["CUI"], "name": r["STR"]} for r in results]}
 
-@app.get("/cuis/{cui}/relations", summary="Get hierarchical relations for a CUI")
-def get_relations(cui: str):
-    """ Get hierarchical relations (parents, children, etc.) of a CUI. """
-    sql = "SELECT CUI2, REL FROM MRREL WHERE CUI1 = %s"
+# @app.get("/cuis/{cui}/relations", summary="Get hierarchical relations for a CUI")
+# def get_relations(cui: str):
+#     """ Get parent CUI(s) from MRHIER. """
+#     sql = "SELECT SUBSTRING_INDEX(PTR, '.', -2) AS parent_cui FROM MRHIER WHERE CUI = %s"
 
-    with connect_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(sql, (cui,))
-            results = cursor.fetchall()
+#     with connect_db() as conn:
+#         with conn.cursor() as cursor:
+#             cursor.execute(sql, (cui,))
+#             result = cursor.fetchone()
 
-    return [{"relatedId": r["CUI2"], "relationLabel": r["REL"]} for r in results]
+#     if not result or not result["parent_cui"]:
+#         raise HTTPException(status_code=404, detail="No parent found")
+
+#     return {"cui": cui, "parent": result["parent_cui"]}
 
 @app.get("/cuis/{cui}/depth", summary="Get depth of a CUI in the hierarchy")
-def get_depth(cui: str, depth: int = 0):
-    """ Recursively determine depth of a CUI in the hierarchy. """
-    sql = "SELECT CUI2 FROM MRREL WHERE CUI1 = %s AND REL = 'PAR'"
+def get_depth(cui: str):
+    """ Determine depth using MRHIER PTR column. """
+    sql = "SELECT LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1 AS depth FROM MRHIER WHERE CUI = %s"
 
     with connect_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(sql, (cui,))
-            parents = cursor.fetchall()
+            result = cursor.fetchone()
 
-    if not parents:
-        return {"cui": cui, "depth": depth}  # Root concept reached
-    
-    return {"cui": cui, "depth": max(get_depth(parent["CUI2"], depth + 1)["depth"] for parent in parents)}
+    if not result or result["depth"] is None:
+        raise HTTPException(status_code=404, detail="Depth not found")
+
+    return {"cui": cui, "depth": result["depth"]}
+
 
 @app.get("/cuis/{cui}/ancestors", summary="Get all ancestors of a CUI")
 def get_ancestors(cui: str):
-    """ Retrieve all ancestors of a CUI. """
-    sql = """
-        WITH RECURSIVE ancestor_tree AS (
-            SELECT CUI1, CUI2 FROM MRREL WHERE CUI1 = %s AND REL = 'PAR'
-            UNION ALL
-            SELECT at.CUI1, mr.CUI2 FROM MRREL mr
-            JOIN ancestor_tree at ON mr.CUI1 = at.CUI2 AND mr.REL = 'PAR'
-        )
-        SELECT DISTINCT CUI2 FROM ancestor_tree
-    """
+    """ Retrieve all ancestors of a CUI from MRHIER. """
+    sql = "SELECT PTR FROM MRHIER WHERE CUI = %s"
 
     with connect_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(sql, (cui,))
-            ancestors = cursor.fetchall()
+            result = cursor.fetchone()
 
-    return [a["CUI2"] for a in ancestors]
+    if not result or not result["PTR"]:
+        raise HTTPException(status_code=404, detail="No ancestors found")
+
+    ancestors = result["PTR"].split(".")[:-1]  # Remove self
+    return {"cui": cui, "ancestors": ancestors}
+
+
 
 @app.get("/ontologies/{source}/{code}/cui", summary="Map an ontology term to a CUI")
 def get_cui_from_ontology(source: str, code: str):
