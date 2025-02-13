@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 import pymysql
 from dotenv import load_dotenv
 import os
@@ -61,39 +61,24 @@ def search_terms(search: str, ontology: str = "HPO"):
 
     return {"results": formatted_results}
 
-@app.get("/concepts/{cui}")
-def get_concept(cui: str):
-    """Fetch details for a specific CUI."""
-    conn = connect_db()
-    query = """
-        SELECT MRCONSO.CODE, MRCONSO.STR, MRDEF.DEF
-        FROM MRCONSO
-        LEFT JOIN MRDEF ON MRCONSO.CUI = MRDEF.CUI
-        WHERE MRCONSO.CODE = %s
-        LIMIT 1;
-    """
+@app.get("/cuis/{cui}", summary="Get details about a specific CUI")
+def get_cui_info(cui: str):
+    """ Get details about a given CUI. """
+    sql = "SELECT CUI, STR FROM MRCONSO WHERE CUI = %s LIMIT 1"
 
-    try:
+    with connect_db() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(query, (cui,))
+            cursor.execute(sql, (cui,))
             result = cursor.fetchone()
 
-    finally:
-        conn.close()
-
     if not result:
-        raise HTTPException(status_code=404, detail=f"No concept found for CUI {cui}")
-
-    return {
-        "code": result["CODE"],
-        "term": result["STR"],
-        "description": clean_html(result["DEF"])
-    }
-
+        raise HTTPException(status_code=404, detail="CUI not found")
+    
+    return {"cui": result["CUI"], "name": result["STR"]}
 
 ## UMLS CUI toolkit
-@app.get("/cuis", summary="Search for CUIs by term")
-def search_cui(query: str):
+app.get("/cuis", summary="Search for CUIs by term")
+def search_cui(query: str = Query(..., description="Search term for CUI lookup")):
     """ Search for CUIs matching a given term. """
     sql = "SELECT CUI, STR FROM MRCONSO WHERE STR LIKE %s LIMIT 50"
     
@@ -107,20 +92,43 @@ def search_cui(query: str):
     
     return {"query": query, "cuis": [{"cui": r["CUI"], "name": r["STR"]} for r in results]}
 
-# @app.get("/cuis/{cui}/relations", summary="Get hierarchical relations for a CUI")
-# def get_relations(cui: str):
-#     """ Get parent CUI(s) from MRHIER. """
-#     sql = "SELECT SUBSTRING_INDEX(PTR, '.', -2) AS parent_cui FROM MRHIER WHERE CUI = %s"
 
-#     with connect_db() as conn:
-#         with conn.cursor() as cursor:
-#             cursor.execute(sql, (cui,))
-#             result = cursor.fetchone()
+@app.get("/cuis/{cui}/relations", summary="Get hierarchical relations for a CUI")
+def get_relations(cui: str):
+    """ Get parent(s), children, and all ancestors of a CUI. """
+    
+    # Query for parents
+    sql_parents = "SELECT DISTINCT SUBSTRING_INDEX(PTR, '.', -2) AS parent_cui FROM MRHIER WHERE CUI = %s"
+    
+    # Query for children
+    sql_children = "SELECT DISTINCT CUI FROM MRHIER WHERE PTR LIKE %s"
+    
+    # Query for ancestors (entire PTR path excluding self)
+    sql_ancestors = "SELECT PTR FROM MRHIER WHERE CUI = %s"
 
-#     if not result or not result["parent_cui"]:
-#         raise HTTPException(status_code=404, detail="No parent found")
+    with connect_db() as conn:
+        with conn.cursor() as cursor:
+            
+            # Get Parents
+            cursor.execute(sql_parents, (cui,))
+            parents = [row["parent_cui"] for row in cursor.fetchall() if row["parent_cui"]]
+            
+            # Get Children
+            cursor.execute(sql_children, (f'%.{cui}',))
+            children = [row["CUI"] for row in cursor.fetchall() if row["CUI"]]
 
-#     return {"cui": cui, "parent": result["parent_cui"]}
+            # Get Ancestors
+            cursor.execute(sql_ancestors, (cui,))
+            ptr_result = cursor.fetchone()
+            ancestors = ptr_result["PTR"].split(".")[:-1] if ptr_result and ptr_result["PTR"] else []
+
+    return {
+        "cui": cui,
+        "parents": parents,
+        "children": children,
+        "ancestors": ancestors
+    }
+
 
 @app.get("/cuis/{cui}/depth", summary="Get depth of a CUI in the hierarchy")
 def get_depth(cui: str):
@@ -174,24 +182,70 @@ def get_cui_from_ontology(source: str, code: str):
 @app.get("/cuis/{cui1}/{cui2}/lca", summary="Get the lowest common ancestor of two CUIs")
 def find_lowest_common_ancestor(cui1: str, cui2: str):
     """ Find the lowest common ancestor (LCA) of two CUIs. """
-    ancestors1 = set(get_ancestors(cui1))
-    ancestors2 = set(get_ancestors(cui2))
+    ancestors1 = set(get_ancestors(cui1)['ancestors'])
+    ancestors2 = set(get_ancestors(cui2)['ancestors'])
 
-    common_ancestors = ancestors1 & ancestors2
+    common_ancestors = ancestors1 & ancestors2  # Find intersection
+
     if not common_ancestors:
         raise HTTPException(status_code=404, detail="No common ancestor found")
 
-    lca = max(common_ancestors, key=lambda cui: get_depth(cui)["depth"])
+    # Find the LCA with the maximum depth (most specific common ancestor)
+    def depth_calc(cui):
+        try: 
+            get_depth(cui)["depth"]
+        except:
+            return 0
+
+    lca = max(common_ancestors, key=lambda cui: depth_calc(cui))
+    
     return {"cui1": cui1, "cui2": cui2, "lca": lca}
+
+
 
 @app.get("/cuis/{cui1}/{cui2}/similarity/wu-palmer", summary="Compute Wu-Palmer similarity")
 def wu_palmer_similarity(cui1: str, cui2: str):
-    """ Compute Wu-Palmer similarity between two CUIs. """
-    lca = find_lowest_common_ancestor(cui1, cui2)["lca"]
-    
-    depth_c1 = get_depth(cui1)["depth"]
-    depth_c2 = get_depth(cui2)["depth"]
-    depth_lca = get_depth(lca)["depth"]
+    """ Compute Wu-Palmer similarity between two CUIs using MRHIER. """
+
+    sql_depth = """
+        SELECT MAX(LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1) AS depth 
+        FROM MRHIER WHERE CUI = %s
+    """
+
+    # Get LCA
+    lca_result = find_lowest_common_ancestor(cui1, cui2)
+    lca = lca_result["lca"]
+
+    with connect_db() as conn:
+        with conn.cursor() as cursor:
+            # Get depth of CUI1
+            cursor.execute(sql_depth, (cui1,))
+            result1 = cursor.fetchone()
+            depth_c1 = result1["depth"] if result1 and result1["depth"] else 0
+
+            # Get depth of CUI2
+            cursor.execute(sql_depth, (cui2,))
+            result2 = cursor.fetchone()
+            depth_c2 = result2["depth"] if result2 and result2["depth"] else 0
+
+            # Get depth of LCA
+            cursor.execute(sql_depth, (lca,))
+            result_lca = cursor.fetchone()
+            depth_lca = result_lca["depth"] if result_lca and result_lca["depth"] else 0
+
+    # Compute Wu-Palmer similarity
+    if depth_c1 == 0 or depth_c2 == 0:
+        raise HTTPException(status_code=400, detail="One or both CUIs have no valid depth")
 
     similarity = (2 * depth_lca) / (depth_c1 + depth_c2)
-    return {"cui1": cui1, "cui2": cui2, "similarity": similarity}
+    
+    return {
+        "cui1": cui1,
+        "cui2": cui2,
+        "lca": lca,
+        "depth_c1": depth_c1,
+        "depth_c2": depth_c2,
+        "depth_lca": depth_lca,
+        "similarity": similarity
+    }
+
