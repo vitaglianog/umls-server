@@ -47,7 +47,6 @@ curl "http://your-ec2-public-ip:8000/concepts/HP:0002896"
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET`  | `/terms?search={term}&ontology={ontology}` | Search for a term (Default: `HPO`) |
-| `GET`  | `/concepts/{cui}` | Get concept details by CUI |
 | `GET`  | `/cuis?query={term}` | Search for CUIs matching a given term |
 | `GET`  | `/cuis/{cui}` | Get details about a specific CUI |
 | `GET`  | `/cuis/{cui}/relations` | Get hierarchical relations (parents, children, ancestors) of a CUI |
@@ -62,10 +61,6 @@ curl "http://your-ec2-public-ip:8000/concepts/HP:0002896"
 #### **Search for Terms**
 `GET /terms?search={term}&ontology={ontology}`
 - Searches for a term in the specified ontology (default: `HPO`).
-
-#### **Get Concept Details**
-`GET /concepts/{cui}`
-- Retrieves details about a medical concept using its CUI.
 
 #### **Search for CUIs by Term**
 `GET /cuis?query={term}`
