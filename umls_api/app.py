@@ -77,7 +77,7 @@ def get_cui_info(cui: str):
     return {"cui": result["CUI"], "name": result["STR"]}
 
 ## UMLS CUI toolkit
-app.get("/cuis", summary="Search for CUIs by term")
+@app.get("/cuis", summary="Search for CUIs by term")
 def search_cui(query: str = Query(..., description="Search term for CUI lookup")):
     """ Search for CUIs matching a given term. """
     sql = "SELECT CUI, STR FROM MRCONSO WHERE STR LIKE %s LIMIT 50"
@@ -93,41 +93,7 @@ def search_cui(query: str = Query(..., description="Search term for CUI lookup")
     return {"query": query, "cuis": [{"cui": r["CUI"], "name": r["STR"]} for r in results]}
 
 
-@app.get("/cuis/{cui}/relations", summary="Get hierarchical relations for a CUI")
-def get_relations(cui: str):
-    """ Get parent(s), children, and all ancestors of a CUI. """
-    
-    # Query for parents
-    sql_parents = "SELECT DISTINCT SUBSTRING_INDEX(PTR, '.', -2) AS parent_cui FROM MRHIER WHERE CUI = %s"
-    
-    # Query for children
-    sql_children = "SELECT DISTINCT CUI FROM MRHIER WHERE PTR LIKE %s"
-    
-    # Query for ancestors (entire PTR path excluding self)
-    sql_ancestors = "SELECT PTR FROM MRHIER WHERE CUI = %s"
 
-    with connect_db() as conn:
-        with conn.cursor() as cursor:
-            
-            # Get Parents
-            cursor.execute(sql_parents, (cui,))
-            parents = [row["parent_cui"] for row in cursor.fetchall() if row["parent_cui"]]
-            
-            # Get Children
-            cursor.execute(sql_children, (f'%.{cui}',))
-            children = [row["CUI"] for row in cursor.fetchall() if row["CUI"]]
-
-            # Get Ancestors
-            cursor.execute(sql_ancestors, (cui,))
-            ptr_result = cursor.fetchone()
-            ancestors = ptr_result["PTR"].split(".")[:-1] if ptr_result and ptr_result["PTR"] else []
-
-    return {
-        "cui": cui,
-        "parents": parents,
-        "children": children,
-        "ancestors": ancestors
-    }
 
 
 @app.get("/cuis/{cui}/depth", summary="Get depth of a CUI in the hierarchy")
