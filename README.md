@@ -42,12 +42,63 @@ curl "http://your-ec2-public-ip:8000/concepts/HP:0002896"
 ```
 
 ---
-
 ## 🌐 **API Endpoints**
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET`  | `/terms?search={term}&ontology={ontology}` | Search for a term (Default: `HPO`) |
 | `GET`  | `/concepts/{cui}` | Get concept details by CUI |
+| `GET`  | `/cuis?query={term}` | Search for CUIs matching a given term |
+| `GET`  | `/cuis/{cui}` | Get details about a specific CUI |
+| `GET`  | `/cuis/{cui}/relations` | Get hierarchical relations (parents, children, ancestors) of a CUI |
+| `GET`  | `/cuis/{cui}/depth` | Get depth of a CUI in the hierarchy |
+| `GET`  | `/cuis/{cui}/ancestors` | Retrieve all ancestors of a CUI |
+| `GET`  | `/ontologies/{source}/{code}/cui` | Map an ontology term (HPO, SNOMED, etc.) to a CUI |
+| `GET`  | `/cuis/{cui1}/{cui2}/lca` | Get the lowest common ancestor (LCA) of two CUIs |
+| `GET`  | `/cuis/{cui1}/{cui2}/similarity/wu-palmer` | Compute Wu-Palmer similarity between two CUIs |
+
+### **Endpoint Descriptions**
+
+#### **Search for Terms**
+`GET /terms?search={term}&ontology={ontology}`
+- Searches for a term in the specified ontology (default: `HPO`).
+
+#### **Get Concept Details**
+`GET /concepts/{cui}`
+- Retrieves details about a medical concept using its CUI.
+
+#### **Search for CUIs by Term**
+`GET /cuis?query={term}`
+- Finds CUIs that match a given search term.
+
+#### **Get CUI Information**
+`GET /cuis/{cui}`
+- Fetches details about a given CUI, including name and description.
+
+#### **Get Hierarchical Relations**
+`GET /cuis/{cui}/relations`
+- Retrieves hierarchical relations for a CUI, including parents, children, and ancestors.
+
+#### **Get Depth of a CUI**
+`GET /cuis/{cui}/depth`
+- Determines the depth of a CUI within the hierarchy.
+
+#### **Retrieve Ancestors of a CUI**
+`GET /cuis/{cui}/ancestors`
+- Retrieves all ancestor CUIs of a given CUI.
+
+#### **Map Ontology Term to CUI**
+`GET /ontologies/{source}/{code}/cui`
+- Maps an ontology term (e.g., HPO, SNOMED) to a corresponding CUI.
+
+#### **Find Lowest Common Ancestor (LCA)**
+`GET /cuis/{cui1}/{cui2}/lca`
+- Finds the lowest common ancestor of two CUIs.
+
+#### **Compute Wu-Palmer Similarity**
+`GET /cuis/{cui1}/{cui2}/similarity/wu-palmer`
+- Computes Wu-Palmer similarity between two CUIs based on hierarchical depth.
+
 
 ---
 
