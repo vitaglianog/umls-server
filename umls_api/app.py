@@ -145,55 +145,63 @@ def get_depth(cui: str):
 
     return {"cui": cui, "depth": result["depth"]}
 
-
-@app.get("/cuis/{cui}/ancestors", summary="Get all ancestors of a CUI")
-def get_ancestors(cui: str):
-    """ Retrieve all ancestors of a CUI by extracting AUIs from MRHIER.PTR and mapping them to CUIs via MRCONSO. """
+@app.get("/cuis/{cui}/relations", summary="Get hierarchical relations for a CUI")
+def get_relations(cui: str):
+    """ Get parent(s), children, and ancestors of a CUI, correctly mapping AUIs to CUIs. """
     
-    # Step 1: Retrieve the AUI paths (PTR) from MRHIER
-    sql_get_ptr = "SELECT PTR FROM MRHIER WHERE CUI = %s"
+    # Query for retrieving PTR (path to root) for ancestors
+    sql_ancestors = "SELECT PTR FROM MRHIER WHERE CUI = %s"
+
+    # Query for retrieving children (CUIs where PTR contains the given CUI)
+    sql_children = "SELECT DISTINCT CUI FROM MRHIER WHERE PTR LIKE %s"
+
+    # Query for retrieving parents by extracting the last component from PTR
+    sql_parents = """
+        SELECT DISTINCT SUBSTRING_INDEX(PTR, '.', -1) AS parent_aui
+        FROM MRHIER WHERE CUI = %s
+    """
 
     try:
         with connect_db() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(sql_get_ptr, (cui,))
+                # Get Ancestors (PTR -> AUIs)
+                cursor.execute(sql_ancestors, (cui,))
                 results = cursor.fetchall()
 
-        if not results:
-            raise HTTPException(status_code=404, detail=f"No ancestors found for CUI {cui}")
+                auis = set()
+                for row in results:
+                    if row["PTR"]:
+                        auis.update(row["PTR"].split("."))  # Extract AUIs from PTR
 
-        # Step 2: Extract AUIs from PTR and map them to CUIs
-        auis = set()
-        for row in results:
-            ptr_path = row["PTR"]
-            if ptr_path:
-                auis.update(ptr_path.split("."))  # Extract AUIs from dot-separated paths
+                # Map AUIs to CUIs using MRCONSO
+                if auis:
+                    sql_map_aui_to_cui = "SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s"
+                    cursor.execute(sql_map_aui_to_cui, (tuple(auis),))
+                    mappings = cursor.fetchall()
+                    aui_to_cui = {m["AUI"]: m["CUI"] for m in mappings}
+                    ancestors = {aui_to_cui[aui] for aui in auis if aui in aui_to_cui}
+                else:
+                    ancestors = set()
 
-        if not auis:
-            return {"cui": cui, "ancestors": []}  # No ancestors found
+                # Get Parents (Convert last AUI in PTR to CUI)
+                cursor.execute(sql_parents, (cui,))
+                parent_auis = [row["parent_aui"] for row in cursor.fetchall() if row["parent_aui"]]
 
-        # Step 3: Map AUIs to CUIs using MRCONSO
-        sql_map_aui_to_cui = """
-            SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s
-        """
+                parents = {aui_to_cui[aui] for aui in parent_auis if aui in aui_to_cui}
 
-        with connect_db() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(sql_map_aui_to_cui, (tuple(auis),))
-                mappings = cursor.fetchall()
+                # Get Children (CUIs where PTR contains this CUI)
+                cursor.execute(sql_children, (f'%.{cui}',))
+                children = [row["CUI"] for row in cursor.fetchall()]
 
-        # Convert AUIs to CUIs
-        aui_to_cui = {m["AUI"]: m["CUI"] for m in mappings}
-        ancestors_cuis = {aui_to_cui[aui] for aui in auis if aui in aui_to_cui}
-
-        return {"cui": cui, "ancestors": list(ancestors_cuis)}
+        return {
+            "cui": cui,
+            "parents": list(parents),
+            "children": children,
+            "ancestors": list(ancestors)
+        }
 
     except Exception as e:
         return {"error": str(e)}
-
-
-
-
 
 
 @app.get("/ontologies/{source}/{code}/cui", summary="Map an ontology term to a CUI")
