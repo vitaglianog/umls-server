@@ -76,6 +76,7 @@ def get_cui_info(cui: str):
     
     return {"cui": result["CUI"], "name": result["STR"]}
 
+
 ## UMLS CUI toolkit
 @app.get("/cuis", summary="Search for CUIs by term")
 def search_cui(query: str = Query(..., description="Search term for CUI lookup")):
@@ -94,6 +95,33 @@ def search_cui(query: str = Query(..., description="Search term for CUI lookup")
 
 
 
+@app.get("/ontologies/HPO/{hpo_code}/cui", summary="Map HPO code to CUI")
+def get_cui_from_hpo(hpo_code: str):
+    """
+    Maps an HPO (Human Phenotype Ontology) code to a UMLS CUI.
+    Tries different HPO term formats to find a match.
+    """
+
+    with connect_db() as conn:
+        with conn.cursor() as cursor:
+            # Try different formats of HPO codes
+            possible_codes = [hpo_code, hpo_code.replace("HP:", ""), f"HP_{hpo_code.replace('HP:', '')}"]
+
+            for code_variant in possible_codes:
+                sql = """
+                SELECT CUI 
+                FROM MRCONSO 
+                WHERE CODE = %s 
+                AND SAB = 'HPO'
+                LIMIT 1
+                """
+                cursor.execute(sql, (code_variant,))
+                result = cursor.fetchone()
+
+                if result:
+                    return {"hpo_code": hpo_code, "cui": result["CUI"]}
+
+    raise HTTPException(status_code=404, detail=f"No CUI found for HPO code {hpo_code}")
 
 
 @app.get("/cuis/{cui}/depth", summary="Get depth of a CUI in the hierarchy")
