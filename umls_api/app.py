@@ -61,6 +61,52 @@ def search_terms(search: str, ontology: str = "HPO"):
 
     return {"results": formatted_results}
 
+
+@app.get("/cuis/{cui}/ancestors", summary="Get all ancestors of a CUI")
+def get_ancestors(cui: str):
+    """ Retrieve all ancestors of a CUI by extracting AUIs from MRHIER.PTR and mapping them to CUIs via MRCONSO. """
+    
+    # Step 1: Retrieve the AUI paths (PTR) from MRHIER
+    sql_get_ptr = "SELECT PTR FROM MRHIER WHERE CUI = %s"
+
+    try:
+        with connect_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_get_ptr, (cui,))
+                results = cursor.fetchall()
+
+        if not results:
+            raise HTTPException(status_code=404, detail=f"No ancestors found for CUI {cui}")
+
+        # Step 2: Extract AUIs from PTR and map them to CUIs
+        auis = set()
+        for row in results:
+            ptr_path = row["PTR"]
+            if ptr_path:
+                auis.update(ptr_path.split("."))  # Extract AUIs from dot-separated paths
+
+        if not auis:
+            return {"cui": cui, "ancestors": []}  # No ancestors found
+
+        # Step 3: Map AUIs to CUIs using MRCONSO
+        sql_map_aui_to_cui = """
+            SELECT DISTINCT AUI, CUI FROM MRCONSO WHERE AUI IN %s
+        """
+
+        with connect_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_map_aui_to_cui, (tuple(auis),))
+                mappings = cursor.fetchall()
+
+        # Convert AUIs to CUIs
+        aui_to_cui = {m["AUI"]: m["CUI"] for m in mappings}
+        ancestors_cuis = {aui_to_cui[aui] for aui in auis if aui in aui_to_cui}
+
+        return {"cui": cui, "ancestors": list(ancestors_cuis)}
+
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/cuis/{cui}", summary="Get details about a specific CUI")
 def get_cui_info(cui: str):
     """ Get details about a given CUI. """
