@@ -3,11 +3,19 @@ import pymysql
 from dotenv import load_dotenv
 import os
 from bs4 import BeautifulSoup
+import asyncio
+import logging
 
 # Load environment variables
 load_dotenv()
 
 app = FastAPI()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Timeout in seconds for external calls
+TIMEOUT = 5
 
 def connect_db():
     """Establish database connection."""
@@ -63,7 +71,7 @@ def search_terms(search: str, ontology: str = "HPO"):
 
 
 @app.get("/cuis/{cui}/ancestors", summary="Get all ancestors of a CUI")
-def get_ancestors(cui: str):
+async def get_ancestors(cui: str):
     """ Retrieve all ancestors of a CUI by extracting AUIs from MRHIER.PTR and mapping them to CUIs via MRCONSO. """
     
     # Step 1: Retrieve the AUI paths (PTR) from MRHIER
@@ -143,7 +151,7 @@ def search_cui(query: str = Query(..., description="Search term for CUI lookup")
 
 
 @app.get("/cuis/{cui}/depth", summary="Get depth of a CUI in the hierarchy")
-def get_depth(cui: str):
+async def get_depth(cui: str):
     """ Determine depth using MRHIER PTR column. """
     sql = "SELECT LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1 AS depth FROM MRHIER WHERE CUI = %s"
 
@@ -238,34 +246,56 @@ def get_cui_from_ontology(source: str, code: str):
     return {"ontology": source, "term": code, "cui": result["CUI"]}
 
 @app.get("/cuis/{cui1}/{cui2}/lca", summary="Get the lowest common ancestor of two CUIs")
-def find_lowest_common_ancestor(cui1: str, cui2: str):
+async def find_lowest_common_ancestor(cui1: str, cui2: str):
     """ Find the lowest common ancestor (LCA) of two CUIs. """
-
     try:
-        # Step 1: Get ancestors for both CUIs
-        ancestors1 = set(get_ancestors(cui1)["ancestors"])
-        ancestors2 = set(get_ancestors(cui2)["ancestors"])
+        # Fetch ancestors for cui1 with a timeout
+        logging.info(f"Fetching ancestors for {cui1}")
+        ancestors1_response = await asyncio.wait_for(get_ancestors(cui1), timeout=TIMEOUT)
+        ancestors1 = set(ancestors1_response["ancestors"])
+        logging.info(f"Ancestors for {cui1}: {ancestors1}")
 
-        # Step 2: Find common ancestors
-        common_ancestors = ancestors1 & ancestors2  # Intersection
+        # Fetch ancestors for cui2 with a timeout
+        logging.info(f"Fetching ancestors for {cui2}")
+        ancestors2_response = await asyncio.wait_for(get_ancestors(cui2), timeout=TIMEOUT)
+        ancestors2 = set(ancestors2_response["ancestors"])
+        logging.info(f"Ancestors for {cui2}: {ancestors2}")
+
+        # Compute common ancestors
+        common_ancestors = ancestors1 & ancestors2
+        logging.info(f"Common ancestors: {common_ancestors}")
 
         if not common_ancestors:
             raise HTTPException(status_code=404, detail="No common ancestor found")
 
-        # Step 3: Find LCA with the maximum depth
-        def get_depth_safe(cui):
-            """ Get depth, handling errors gracefully. """
+        # Helper to get depth with logging and timeout
+        async def get_depth_safe(cui: str) -> int:
             try:
-                return get_depth(cui)["depth"]
-            except Exception:
+                logging.info(f"Fetching depth for {cui}")
+                depth_response = await asyncio.wait_for(get_depth(cui), timeout=TIMEOUT)
+                depth = depth_response["depth"]
+                logging.info(f"Depth for {cui}: {depth}")
+                return depth
+            except Exception as e:
+                logging.error(f"Error fetching depth for {cui}: {e}")
                 return 0  # Default depth if an error occurs
 
-        lca = max(common_ancestors, key=lambda cui: get_depth_safe(cui))
+        # Run all depth calculations concurrently
+        tasks = [get_depth_safe(ancestor) for ancestor in common_ancestors]
+        depth_results = await asyncio.gather(*tasks)
+        depth_dict = {ancestor: depth for ancestor, depth in zip(common_ancestors, depth_results)}
+        logging.info(f"Depths for common ancestors: {depth_dict}")
 
-        return {"cui1": cui1, "cui2": cui2, "lca": lca}
+        # Determine the lowest common ancestor by maximum depth
+        lca = max(depths, key=depths.get)
+        logging.info(f"Lowest common ancestor: {lca}")
+
+        return {"cui1": cui1, "cui2": cui2, "lca": lca, "depth":depth_dict[lca]}
 
     except Exception as e:
+        logging.error(f"Error in find_lowest_common_ancestor: {e}")
         return {"error": str(e)}
+
 
 
 
