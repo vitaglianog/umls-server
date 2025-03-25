@@ -300,42 +300,52 @@ async def find_lowest_common_ancestor(cui1: str, cui2: str):
 
 
 
+async def fetch_depth(cui: str) -> int:
+    logging.debug("Starting fetch_depth for CUI: %s", cui)
+    try:
+        loop = asyncio.get_running_loop()
+        start_time = time.perf_counter()
+        depth = await asyncio.wait_for(loop.run_in_executor(executor, query_depth, cui), timeout=TIMEOUT)
+        elapsed = time.perf_counter() - start_time
+        logging.debug("fetch_depth for CUI %s returned %s in %.3f seconds.", cui, depth, elapsed)
+    except asyncio.TimeoutError:
+        logging.error("Timeout retrieving depth for CUI: %s", cui)
+        raise HTTPException(status_code=504, detail=f"Timeout retrieving depth for CUI {cui}")
+    except Exception as e:
+        logging.error("Error retrieving depth for CUI %s: %s", cui, e)
+        raise HTTPException(status_code=500, detail=f"Error retrieving depth for CUI {cui}")
+    
+    if depth is None:
+        logging.error("Depth not found for CUI: %s", cui)
+        raise HTTPException(status_code=404, detail=f"Depth not found for CUI {cui}")
+
+    logging.debug("Depth for CUI %s is %s", cui, depth)
+    return depth
+
+
 @app.get("/cuis/{cui1}/{cui2}/similarity/wu-palmer", summary="Compute Wu-Palmer similarity")
-def wu_palmer_similarity(cui1: str, cui2: str):
-    """ Compute Wu-Palmer similarity between two CUIs using MRHIER. """
+async def wu_palmer_similarity(cui1: str, cui2: str):
+    """Compute Wu-Palmer similarity between two CUIs using asynchronous DB access."""
 
-    sql_depth = """
-        SELECT MAX(LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1) AS depth 
-        FROM MRHIER WHERE CUI = %s
-    """
-
-    # Get LCA
-    lca_result = find_lowest_common_ancestor(cui1, cui2)
+    # Get LCA (make sure it's async and uses fetch_depth!)
+    lca_result = await find_lowest_common_ancestor(cui1, cui2)
     lca = lca_result["lca"]
 
-    with connect_db() as conn:
-        with conn.cursor() as cursor:
-            # Get depth of CUI1
-            cursor.execute(sql_depth, (cui1,))
-            result1 = cursor.fetchone()
-            depth_c1 = result1["depth"] if result1 and result1["depth"] else 0
+    # Run depth queries concurrently using your async-safe fetch_depth function
+    try:
+        depth_c1, depth_c2, depth_lca = await asyncio.gather(
+            fetch_depth(cui1),
+            fetch_depth(cui2),
+            fetch_depth(lca),
+        )
+    except HTTPException as e:
+        raise e  # Re-raise if one of the depths failed
 
-            # Get depth of CUI2
-            cursor.execute(sql_depth, (cui2,))
-            result2 = cursor.fetchone()
-            depth_c2 = result2["depth"] if result2 and result2["depth"] else 0
-
-            # Get depth of LCA
-            cursor.execute(sql_depth, (lca,))
-            result_lca = cursor.fetchone()
-            depth_lca = result_lca["depth"] if result_lca and result_lca["depth"] else 0
-
-    # Compute Wu-Palmer similarity
     if depth_c1 == 0 or depth_c2 == 0:
         raise HTTPException(status_code=400, detail="One or both CUIs have no valid depth")
 
     similarity = (2 * depth_lca) / (depth_c1 + depth_c2)
-    
+
     return {
         "cui1": cui1,
         "cui2": cui2,
@@ -343,6 +353,5 @@ def wu_palmer_similarity(cui1: str, cui2: str):
         "depth_c1": depth_c1,
         "depth_c2": depth_c2,
         "depth_lca": depth_lca,
-        "similarity": similarity
+        "similarity": similarity,
     }
-
