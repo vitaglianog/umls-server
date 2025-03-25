@@ -15,7 +15,7 @@ app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
 # Timeout in seconds for external calls
-TIMEOUT = 5
+TIMEOUT = 10
 
 def connect_db():
     """Establish database connection."""
@@ -150,21 +150,6 @@ def search_cui(query: str = Query(..., description="Search term for CUI lookup")
 
 
 
-@app.get("/cuis/{cui}/depth", summary="Get depth of a CUI in the hierarchy")
-async def get_depth(cui: str):
-    """ Determine depth using MRHIER PTR column. """
-    sql = "SELECT LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1 AS depth FROM MRHIER WHERE CUI = %s"
-
-    with connect_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(sql, (cui,))
-            result = cursor.fetchone()
-
-    if not result or result["depth"] is None:
-        raise HTTPException(status_code=404, detail="Depth not found")
-
-    return {"cui": cui, "depth": result["depth"]}
-
 @app.get("/cuis/{cui}/relations", summary="Get hierarchical relations for a CUI")
 def get_relations(cui: str):
     """ Get parent(s), children, and ancestors of a CUI, correctly mapping AUIs to CUIs. """
@@ -245,97 +230,70 @@ def get_cui_from_ontology(source: str, code: str):
     
     return {"ontology": source, "term": code, "cui": result["CUI"]}
 
-@app.get("/cuis/{cui1}/{cui2}/lca", summary="Get the lowest common ancestor of two CUIs")
-async def find_lowest_common_ancestor(cui1: str, cui2: str):
-    """ Find the lowest common ancestor (LCA) of two CUIs. """
+def query_depth(cui: str) -> int:
+    sql = "SELECT LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1 AS depth FROM MRHIER WHERE CUI = %s"
+    with connect_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, (cui,))
+            result = cursor.fetchone()
+    # Return the depth if available; otherwise, None
+    return result.get("depth") if result and result.get("depth") is not None else None
+
+async def fetch_depth(cui: str) -> int:
+    """Helper to fetch depth asynchronously with timeout and error handling."""
     try:
-        # Fetch ancestors for cui1 with a timeout
-        logging.info(f"Fetching ancestors for {cui1}")
-        ancestors1_response = await asyncio.wait_for(get_ancestors(cui1), timeout=TIMEOUT)
-        ancestors1 = set(ancestors1_response["ancestors"])
-        logging.info(f"Ancestors for {cui1}: {ancestors1}")
-
-        # Fetch ancestors for cui2 with a timeout
-        logging.info(f"Fetching ancestors for {cui2}")
-        ancestors2_response = await asyncio.wait_for(get_ancestors(cui2), timeout=TIMEOUT)
-        ancestors2 = set(ancestors2_response["ancestors"])
-        logging.info(f"Ancestors for {cui2}: {ancestors2}")
-
-        # Compute common ancestors
-        common_ancestors = ancestors1 & ancestors2
-        logging.info(f"Common ancestors: {common_ancestors}")
-
-        if not common_ancestors:
-            raise HTTPException(status_code=404, detail="No common ancestor found")
-
-        # Helper to get depth with logging and timeout
-        async def get_depth_safe(cui: str) -> int:
-            try:
-                logging.info(f"Fetching depth for {cui}")
-                depth_response = await asyncio.wait_for(get_depth(cui), timeout=TIMEOUT)
-                depth = depth_response["depth"]
-                logging.info(f"Depth for {cui}: {depth}")
-                return depth
-            except Exception as e:
-                logging.error(f"Error fetching depth for {cui}: {e}")
-                return 0  # Default depth if an error occurs
-
-        # Run all depth calculations concurrently
-        tasks = [get_depth_safe(ancestor) for ancestor in common_ancestors]
-        depth_results = await asyncio.gather(*tasks)
-        depth_dict = {ancestor: depth for ancestor, depth in zip(common_ancestors, depth_results)}
-        logging.info(f"Depths for common ancestors: {depth_dict}")
-
-        # Determine the lowest common ancestor by maximum depth
-        lca = max(depths, key=depths.get)
-        logging.info(f"Lowest common ancestor: {lca}")
-
-        return {"cui1": cui1, "cui2": cui2, "lca": lca, "depth":depth_dict[lca]}
-
+        depth = await asyncio.wait_for(asyncio.to_thread(query_depth, cui), timeout=TIMEOUT)
+    except asyncio.TimeoutError:
+        logging.error("Timeout retrieving depth for CUI: %s", cui)
+        raise HTTPException(status_code=504, detail=f"Timeout retrieving depth for CUI {cui}")
     except Exception as e:
-        logging.error(f"Error in find_lowest_common_ancestor: {e}")
-        return {"error": str(e)}
+        logging.error("Error retrieving depth for CUI %s: %s", cui, e)
+        raise HTTPException(status_code=500, detail=f"Error retrieving depth for CUI {cui}")
+    
+    if depth is None:
+        logging.error("Depth not found for CUI: %s", cui)
+        raise HTTPException(status_code=404, detail=f"Depth not found for CUI {cui}")
+    
+    logging.info("Depth for CUI %s is %s", cui, depth)
+    return depth
 
-
-
+# Updated get_depth endpoint that uses the helper function
+@app.get("/cuis/{cui}/depth", summary="Get depth of a CUI in the hierarchy")
+async def get_depth(cui: str):
+    depth = await fetch_depth(cui)
+    return {"cui": cui, "depth": depth}
 
 
 @app.get("/cuis/{cui1}/{cui2}/similarity/wu-palmer", summary="Compute Wu-Palmer similarity")
-def wu_palmer_similarity(cui1: str, cui2: str):
-    """ Compute Wu-Palmer similarity between two CUIs using MRHIER. """
+async def wu_palmer_similarity(cui1: str, cui2: str):
+    """Compute Wu-Palmer similarity between two CUIs using MRHIER and the fetch_depth helper."""
+    logging.info("Computing Wu-Palmer similarity for %s and %s", cui1, cui2)
 
-    sql_depth = """
-        SELECT MAX(LENGTH(PTR) - LENGTH(REPLACE(PTR, '.', '')) + 1) AS depth 
-        FROM MRHIER WHERE CUI = %s
-    """
+    # Get the lowest common ancestor asynchronously.
+    lca_result = await find_lowest_common_ancestor(cui1, cui2)
+    lca = lca_result.get("lca")
+    logging.info("Lowest common ancestor for %s and %s is %s", cui1, cui2, lca)
 
-    # Get LCA
-    lca_result = find_lowest_common_ancestor(cui1, cui2)
-    lca = lca_result["lca"]
+    # Concurrently fetch depths for cui1, cui2, and the LCA.
+    try:
+        depth_c1, depth_c2, depth_lca = await asyncio.gather(
+            fetch_depth(cui1),
+            fetch_depth(cui2),
+            fetch_depth(lca)
+        )
+    except HTTPException as e:
+        logging.error("Error fetching depths: %s", e.detail)
+        raise
 
-    with connect_db() as conn:
-        with conn.cursor() as cursor:
-            # Get depth of CUI1
-            cursor.execute(sql_depth, (cui1,))
-            result1 = cursor.fetchone()
-            depth_c1 = result1["depth"] if result1 and result1["depth"] else 0
+    logging.info("Depths: %s -> %s, %s -> %s, LCA %s -> %s", cui1, depth_c1, cui2, depth_c2, lca, depth_lca)
 
-            # Get depth of CUI2
-            cursor.execute(sql_depth, (cui2,))
-            result2 = cursor.fetchone()
-            depth_c2 = result2["depth"] if result2 and result2["depth"] else 0
-
-            # Get depth of LCA
-            cursor.execute(sql_depth, (lca,))
-            result_lca = cursor.fetchone()
-            depth_lca = result_lca["depth"] if result_lca and result_lca["depth"] else 0
-
-    # Compute Wu-Palmer similarity
     if depth_c1 == 0 or depth_c2 == 0:
+        logging.error("One or both CUIs have no valid depth")
         raise HTTPException(status_code=400, detail="One or both CUIs have no valid depth")
 
     similarity = (2 * depth_lca) / (depth_c1 + depth_c2)
-    
+    logging.info("Computed Wu-Palmer similarity: %s", similarity)
+
     return {
         "cui1": cui1,
         "cui2": cui2,
@@ -346,3 +304,41 @@ def wu_palmer_similarity(cui1: str, cui2: str):
         "similarity": similarity
     }
 
+
+@app.get("/cuis/{cui1}/{cui2}/lca", summary="Get the lowest common ancestor of two CUIs")
+async def find_lowest_common_ancestor(cui1: str, cui2: str):
+    """Find the lowest common ancestor (LCA) of two CUIs using the new depth functions."""
+    logging.info("Fetching ancestors for %s and %s", cui1, cui2)
+    try:
+        # Get ancestors for each CUI. We assume these functions are asynchronous.
+        ancestors1_response = await asyncio.wait_for(get_ancestors(cui1), timeout=TIMEOUT)
+        ancestors2_response = await asyncio.wait_for(get_ancestors(cui2), timeout=TIMEOUT)
+    except Exception as e:
+        logging.error("Error fetching ancestors: %s", e)
+        raise HTTPException(status_code=500, detail="Error fetching ancestors")
+
+    ancestors1 = set(ancestors1_response.get("ancestors", []))
+    ancestors2 = set(ancestors2_response.get("ancestors", []))
+    common_ancestors = ancestors1 & ancestors2
+    logging.info("Common ancestors: %s", common_ancestors)
+
+    if not common_ancestors:
+        raise HTTPException(status_code=404, detail="No common ancestor found")
+
+    # Concurrently fetch depths for each common ancestor using our new helper.
+    tasks = {ancestor: asyncio.create_task(fetch_depth(ancestor)) for ancestor in common_ancestors}
+    depth_dict = {}
+    for ancestor, task in tasks.items():
+        try:
+            depth_dict[ancestor] = await task
+        except Exception as e:
+            logging.error("Error fetching depth for %s: %s", ancestor, e)
+            depth_dict[ancestor] = 0  # Fallback to 0 on error
+
+    if not depth_dict:
+        raise HTTPException(status_code=404, detail="Unable to compute depths for common ancestors")
+
+    # Determine the LCA as the ancestor with the maximum depth.
+    lca = max(depth_dict, key=depth_dict.get)
+    logging.info("Lowest common ancestor for %s and %s is %s", cui1, cui2, lca)
+    return {"cui1": cui1, "cui2": cui2, "lca": lca, "depth":depth_dict[lca]}
