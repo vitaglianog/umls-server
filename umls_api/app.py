@@ -15,7 +15,7 @@ app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
 # Timeout in seconds for external calls
-TIMEOUT = 10
+TIMEOUT = 500
 
 def connect_db():
     """Establish database connection."""
@@ -301,7 +301,7 @@ async def wu_palmer_similarity(cui1: str, cui2: str):
         "depth_c1": depth_c1,
         "depth_c2": depth_c2,
         "depth_lca": depth_lca,
-        "similarity": similarity
+        "similarity": similarity,
     }
 
 
