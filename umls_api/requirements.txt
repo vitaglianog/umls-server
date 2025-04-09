@@ -1,0 +1,5 @@
+fastapi
+uvicorn 
+pymysql
+python_dotenv
+beautifulsoup4
