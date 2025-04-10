@@ -66,6 +66,8 @@ The system consists of three main components:
 | `GET`  | `/ontologies/{source}/{code}/cui` | Map an ontology term (HPO, SNOMED, etc.) to a CUI |
 | `GET`  | `/cuis/{cui1}/{cui2}/lca` | Get the lowest common ancestor (LCA) of two CUIs |
 | `GET`  | `/cuis/{cui1}/{cui2}/similarity/wu-palmer` | Compute Wu-Palmer similarity between two CUIs |
+| `GET`  | `/cuis/{cui}/hpo` | Retrieve HPO code from CUI |
+
 
 ### Endpoint Descriptions
 
@@ -104,6 +106,10 @@ The system consists of three main components:
 #### Compute Wu-Palmer Similarity
 `GET /cuis/{cui1}/{cui2}/similarity/wu-palmer`
 - Computes Wu-Palmer similarity between two CUIs based on hierarchical depth.
+
+#### Find HPO from CUI term
+`GET /cuis/{cui1}/hpo`
+- Retrieves the HPO term and its corresponding code associated with a given CUI.
 
 ## 📦 Installation
 
