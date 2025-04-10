@@ -1,0 +1,12 @@
+nohup: ignoring input
+INFO:     Started server process [4146]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     146.70.58.196:40020 - "GET /intents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37430 - "GET /intents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55058 - "GET /intents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58940 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Processing intent: wu_palmer_similarity with parameters: {'cui1': 'C0011991', 'cui2': 'C0032280'}
+ERROR:mcp_app:Request error: 
+ERROR:mcp_app:Error processing intent: 

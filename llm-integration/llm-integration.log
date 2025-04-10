@@ -1,0 +1,12 @@
+nohup: ignoring input
+INFO:     Started server process [11558]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8002 (Press CTRL+C to quit)
+INFO:app:Processing query: What is the similarity between asthma and pneumonia?
+INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app:LLM response: {"intent": "wu_palmer_similarity", "parameters": {"cui1": "C0011991", "cui2": "C0032280"}}
+ERROR:app:Error processing intent: 
+ERROR:app:Error processing query: 
+INFO:     146.70.58.196:23056 - "POST /query HTTP/1.1" 500 Internal Server Error

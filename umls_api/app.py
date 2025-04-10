@@ -342,3 +342,22 @@ async def find_lowest_common_ancestor(cui1: str, cui2: str):
     lca = max(depth_dict, key=depth_dict.get)
     logging.info("Lowest common ancestor for %s and %s is %s", cui1, cui2, lca)
     return {"cui1": cui1, "cui2": cui2, "lca": lca, "depth":depth_dict[lca]}
+
+@app.get("/cuis/{cui}/hpo", summary="Get HPO term and code from CUI")
+def get_hpo_term(cui: str):
+    """Get the HPO term and code associated with a given CUI."""
+    sql = "SELECT STR, CODE FROM MRCONSO WHERE CUI = %s AND SAB = 'HPO' LIMIT 1"
+
+    with connect_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, (cui,))
+            result = cursor.fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="HPO term not found for the given CUI")
+    
+    return {
+        "cui": cui,
+        "hpo_term": result["STR"],
+        "hpo_code": result["CODE"]
+    }

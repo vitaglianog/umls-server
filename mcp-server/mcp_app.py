@@ -97,6 +97,8 @@ async def call_umls_api(endpoint: str, method: str, params: Dict[str, Any]) -> A
     """Call the UMLS API with the given parameters."""
     url = f"{UMLS_API_URL}{endpoint}"
     
+    logger.info(f"Calling UMLS API: {url} with params: {params}")
+    
     async with httpx.AsyncClient() as client:
         try:
             if method == "GET":
@@ -107,11 +109,14 @@ async def call_umls_api(endpoint: str, method: str, params: Dict[str, Any]) -> A
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error: {e}")
+            logger.error(f"HTTP error: {e}, Response: {e.response.text}")
             raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
         except httpx.RequestError as e:
             logger.error(f"Request error: {e}")
             raise HTTPException(status_code=500, detail=f"Error connecting to UMLS API: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 # Routes
 @app.post("/process_intent", response_model=IntentResponse)
