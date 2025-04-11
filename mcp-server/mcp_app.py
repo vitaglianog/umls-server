@@ -125,29 +125,42 @@ async def process_intent(request: IntentRequest, api_key: str = Depends(verify_a
     intent = request.intent
     params = request.parameters
     
-    logger.info(f"Processing intent: {intent} with parameters: {params}")
+    logger.info(f"Received request to process intent: {intent} with parameters: {params}")
     
     if intent not in INTENT_MAPPINGS:
+        logger.error(f"Unknown intent: {intent}")
         raise HTTPException(status_code=400, detail=f"Unknown intent: {intent}")
     
     intent_config = INTENT_MAPPINGS[intent]
     endpoint = intent_config["endpoint"]
     method = intent_config["method"]
     
+    logger.info(f"Intent '{intent}' mapped to endpoint '{endpoint}' with method '{method}'")
+    
     # Check if all required parameters are provided
     missing_params = [param for param in intent_config["params"] if param not in params]
     if missing_params:
+        logger.error(f"Missing required parameters: {missing_params}")
         raise HTTPException(status_code=400, detail=f"Missing required parameters: {missing_params}")
     
     # Format URL with path parameters
-    formatted_endpoint = format_url(endpoint, params)
+    try:
+        formatted_endpoint = format_url(endpoint, params)
+        logger.info(f"Formatted endpoint URL: {formatted_endpoint}")
+    except HTTPException as e:
+        logger.error(f"Error formatting URL: {e.detail}")
+        raise
     
     # Extract query parameters (parameters that are not in the path)
     path_params = {param: params[param] for param in intent_config["params"] if f"{{{param}}}" in endpoint}
     query_params = {k: v for k, v in params.items() if k not in path_params}
     
+    logger.info(f"Path parameters: {path_params}")
+    logger.info(f"Query parameters: {query_params}")
+    
     try:
         result = await call_umls_api(formatted_endpoint, method, query_params)
+        logger.info(f"Received response from UMLS API: {result}")
         return IntentResponse(result=result)
     except Exception as e:
         logger.error(f"Error processing intent: {e}")

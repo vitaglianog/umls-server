@@ -10,3 +10,23 @@ INFO:app:LLM response: {"intent": "wu_palmer_similarity", "parameters": {"cui1":
 ERROR:app:Error processing intent: 
 ERROR:app:Error processing query: 
 INFO:     146.70.58.196:23056 - "POST /query HTTP/1.1" 500 Internal Server Error
+INFO:app:Processing query: What is the similarity between asthma and pneumonia?
+INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app:LLM response: {"intent": "wu_palmer_similarity", "parameters": {"cui1": "C0011991", "cui2": "C0032280"}}
+ERROR:app:Error processing intent: 
+ERROR:app:Error processing query: 
+INFO:     146.70.58.196:60323 - "POST /query HTTP/1.1" 500 Internal Server Error
+INFO:app:Processing query: What is the HPO code for pneumonia?
+INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app:LLM response: {"intent": "search_terms", "parameters": {"ontology": "HPO", "term": "pneumonia"}}
+INFO:httpx:HTTP Request: POST http://localhost:8001/process_intent "HTTP/1.1 400 Bad Request"
+ERROR:app:Error processing intent: Client error '400 Bad Request' for url 'http://localhost:8001/process_intent'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+ERROR:app:Error processing query: 
+INFO:     146.70.58.196:35517 - "POST /query HTTP/1.1" 500 Internal Server Error
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [11558]
