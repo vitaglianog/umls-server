@@ -66,6 +66,11 @@ INTENT_MAPPINGS = {
         "endpoint": "/cuis/{cui1}/{cui2}/similarity/wu-palmer",
         "method": "GET",
         "params": ["cui1", "cui2"]
+    },
+    "get_hpo_term": {
+        "endpoint": "/cuis/{cui}/hpo",
+        "method": "GET",
+        "params": ["cui"]
     }
 }
 
@@ -119,56 +124,87 @@ async def call_umls_api(endpoint: str, method: str, params: Dict[str, Any]) -> A
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 # Routes
-@app.post("/process_intent", response_model=IntentResponse)
-async def process_intent(request: IntentRequest, api_key: str = Depends(verify_api_key)):
-    """Process an intent and map it to the appropriate UMLS API endpoint."""
+@app.post("/process_intent")
+async def process_intent(request: IntentRequest):
+    """Process an intent by mapping it to the appropriate UMLS API endpoint."""
     intent = request.intent
-    params = request.parameters
+    parameters = request.parameters
     
-    logger.info(f"Received request to process intent: {intent} with parameters: {params}")
+    logger.info(f"Received request to process intent: {intent} with parameters: {parameters}")
     
     if intent not in INTENT_MAPPINGS:
         logger.error(f"Unknown intent: {intent}")
         raise HTTPException(status_code=400, detail=f"Unknown intent: {intent}")
     
-    intent_config = INTENT_MAPPINGS[intent]
-    endpoint = intent_config["endpoint"]
-    method = intent_config["method"]
+    mapping = INTENT_MAPPINGS[intent]
+    endpoint = mapping["endpoint"]
+    method = mapping["method"]
+    required_params = mapping["params"]
     
     logger.info(f"Intent '{intent}' mapped to endpoint '{endpoint}' with method '{method}'")
     
-    # Check if all required parameters are provided
-    missing_params = [param for param in intent_config["params"] if param not in params]
+    # Handle parameter aliases (e.g., 'term' for 'search' in search_terms intent)
+    if intent == "search_terms" and "term" in parameters:
+        parameters["search"] = parameters.pop("term")
+    
+    # Check if all required parameters are present
+    missing_params = [param for param in required_params if param not in parameters]
     if missing_params:
         logger.error(f"Missing required parameters: {missing_params}")
         raise HTTPException(status_code=400, detail=f"Missing required parameters: {missing_params}")
     
-    # Format URL with path parameters
-    try:
-        formatted_endpoint = format_url(endpoint, params)
-        logger.info(f"Formatted endpoint URL: {formatted_endpoint}")
-    except HTTPException as e:
-        logger.error(f"Error formatting URL: {e.detail}")
-        raise
+    # Format the endpoint URL with path parameters
+    formatted_endpoint = endpoint
+    path_params = {}
+    query_params = {}
     
-    # Extract query parameters (parameters that are not in the path)
-    path_params = {param: params[param] for param in intent_config["params"] if f"{{{param}}}" in endpoint}
-    query_params = {k: v for k, v in params.items() if k not in path_params}
+    for param in required_params:
+        if f"{{{param}}}" in endpoint:
+            formatted_endpoint = formatted_endpoint.replace(f"{{{param}}}", parameters[param])
+            path_params[param] = parameters[param]
+        else:
+            query_params[param] = parameters[param]
     
+    logger.info(f"Formatted endpoint URL: {formatted_endpoint}")
     logger.info(f"Path parameters: {path_params}")
     logger.info(f"Query parameters: {query_params}")
     
+    # Call the UMLS API
+    umls_api_url = f"{UMLS_API_URL}{formatted_endpoint}"
+    logger.info(f"Calling UMLS API: {umls_api_url} with params: {query_params}")
+    
     try:
-        result = await call_umls_api(formatted_endpoint, method, query_params)
-        logger.info(f"Received response from UMLS API: {result}")
-        return IntentResponse(result=result)
+        # Increase timeout for complex operations like Wu-Palmer similarity
+        timeout = 600.0 if intent == "wu_palmer_similarity" else 30.0
+        
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            if method == "GET":
+                response = await client.get(umls_api_url, params=query_params)
+            elif method == "POST":
+                response = await client.post(umls_api_url, json=query_params)
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported method: {method}")
+            
+            logger.info(f"Received response from UMLS API: {response.text}")
+            
+            if response.status_code == 404:
+                error_detail = response.json().get("detail", "Resource not found")
+                logger.error(f"Resource not found: {error_detail}")
+                return {"error": error_detail, "status": "not_found"}
+            
+            response.raise_for_status()
+            return response.json()
+    except httpx.TimeoutException as e:
+        logger.error(f"Timeout error: {str(e)}")
+        return {"error": f"The operation is taking longer than expected. Please try again later.", "status": "timeout"}
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error: {e.response.text}")
+        error_detail = e.response.json().get("detail", str(e))
+        logger.error(f"Request error: {error_detail}")
+        return {"error": error_detail, "status": "error"}
     except Exception as e:
-        logger.error(f"Error processing intent: {e}")
-        return IntentResponse(
-            result=None,
-            status="error",
-            message=str(e)
-        )
+        logger.error(f"Error processing intent: {str(e)}")
+        return {"error": str(e), "status": "error"}
 
 @app.get("/intents", response_model=List[str])
 async def list_intents(api_key: str = Depends(verify_api_key)):

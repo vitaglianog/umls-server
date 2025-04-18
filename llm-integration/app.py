@@ -74,21 +74,42 @@ async def get_intent_details(intent: str) -> Dict[str, Any]:
             logger.error(f"Error getting intent details: {e}")
             return {}
 
-async def process_intent(intent: str, parameters: Dict[str, Any]) -> Any:
-    """Process an intent through the MCP server."""
-    async with httpx.AsyncClient() as client:
+async def process_intent(intent: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """Process an intent by sending it to the MCP server."""
+    logger.info(f"Processing intent: {intent} with parameters: {parameters}")
+    
+    # Set a longer timeout for complex operations like Wu-Palmer similarity
+    timeout = 600.0 if intent == "wu_palmer_similarity" else 30.0
+    
+    async with httpx.AsyncClient(timeout=timeout) as client:
         try:
+            # Send the request in the format expected by the MCP Server
             response = await client.post(
                 f"{MCP_SERVER_URL}/process_intent",
-                headers={"X-API-Key": API_KEY, "Content-Type": "application/json"},
                 json={"intent": intent, "parameters": parameters},
-                timeout=10.0
+                headers={
+                    "Content-Type": "application/json",
+                    "X-API-Key": API_KEY
+                }
             )
-            response.raise_for_status()
-            return response.json()
+            
+            if response.status_code == 200:
+                result = response.json()
+                # Check if the result contains an error
+                if "error" in result:
+                    logger.error(f"Error from MCP Server: {result['error']}")
+                    return {"error": result["error"], "status": result.get("status", "error")}
+                return result
+            else:
+                error_detail = response.json().get("detail", "Unknown error")
+                logger.error(f"Error from MCP Server: {error_detail}")
+                return {"error": error_detail, "status": "error"}
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout error when calling MCP Server: {str(e)}")
+            return {"error": "The operation is taking longer than expected. Please try again later.", "status": "timeout"}
         except Exception as e:
-            logger.error(f"Error processing intent: {e}")
-            raise HTTPException(status_code=500, detail=f"Error processing intent: {str(e)}")
+            logger.error(f"Error processing intent: {str(e)}")
+            return {"error": str(e), "status": "error"}
 
 def create_system_prompt() -> str:
     """Create the system prompt for the LLM."""
@@ -105,6 +126,7 @@ Available intents:
 - get_cui_from_ontology: Map an ontology term to a CUI
 - find_lca: Get the lowest common ancestor of two CUIs
 - wu_palmer_similarity: Compute Wu-Palmer similarity between two CUIs
+- get_hpo_term: Get the HPO term and code for a given CUI
 
 For each query, you should:
 1. Identify the most appropriate intent
@@ -120,6 +142,12 @@ Response: {"intent": "get_ancestors", "parameters": {"cui": "C0011849"}}
 
 User: "What is the similarity between CUI C0011849 and C0011860?"
 Response: {"intent": "wu_palmer_similarity", "parameters": {"cui1": "C0011849", "cui2": "C0011860"}}
+
+User: "What is the HPO code for CUI C0011849?"
+Response: {"intent": "get_hpo_term", "parameters": {"cui": "C0011849"}}
+
+User: "Search for asthma in HPO"
+Response: {"intent": "search_terms", "parameters": {"search": "asthma", "ontology": "HPO"}}
 
 Always respond with a valid JSON object containing the intent and parameters."""
 
@@ -205,6 +233,31 @@ async def process_query(request: QueryRequest, api_key: str = Depends(verify_api
 
 def format_response_for_user(intent: str, result: Any) -> str:
     """Format the API result into a natural language response."""
+    # Check if the result contains an error
+    if isinstance(result, dict) and "error" in result:
+        error_message = result["error"]
+        
+        # Handle case where error_message is a list (from Pydantic validation errors)
+        if isinstance(error_message, list):
+            error_details = []
+            for error in error_message:
+                if isinstance(error, dict) and "msg" in error:
+                    error_details.append(error["msg"])
+                else:
+                    error_details.append(str(error))
+            error_message = "; ".join(error_details)
+        
+        # Handle timeout errors
+        if result.get("status") == "timeout":
+            return f"The operation is taking longer than expected. This is normal for complex calculations like similarity measures. Please try again in a few moments."
+        
+        if "No common ancestor found" in error_message:
+            return f"I couldn't find a common ancestor between the two medical terms. This means they are not related in the UMLS hierarchy, so I cannot calculate their similarity."
+        elif "not found" in error_message.lower():
+            return f"I couldn't find the information you requested: {error_message}"
+        else:
+            return f"I encountered an error while processing your request: {error_message}"
+    
     if intent == "search_terms":
         if not result.get("results"):
             return "No medical terms found matching your query."
@@ -250,22 +303,22 @@ def format_response_for_user(intent: str, result: Any) -> str:
         children = result.get("children", [])
         ancestors = result.get("ancestors", [])
         
-        response = f"Relations for CUI {result['cui']}:\n"
+        response = f"Relations for CUI {result['cui']}:\n\n"
         
         if parents:
-            response += f"- Parents: {', '.join(parents)}\n"
+            response += f"Parents: {', '.join(parents)}\n"
         else:
-            response += "- No parents found\n"
+            response += "No parents found.\n"
         
         if children:
-            response += f"- Children: {', '.join(children)}\n"
+            response += f"Children: {', '.join(children)}\n"
         else:
-            response += "- No children found\n"
+            response += "No children found.\n"
         
         if ancestors:
-            response += f"- Ancestors: {', '.join(ancestors)}\n"
+            response += f"Ancestors: {', '.join(ancestors)}\n"
         else:
-            response += "- No ancestors found\n"
+            response += "No ancestors found.\n"
         
         return response
     
@@ -273,13 +326,16 @@ def format_response_for_user(intent: str, result: Any) -> str:
         return f"The CUI for {result['ontology']} term {result['term']} is {result['cui']}."
     
     elif intent == "find_lca":
-        return f"The lowest common ancestor of CUIs {result['cui1']} and {result['cui2']} is {result['lca']} with depth {result['depth']}."
+        return f"The lowest common ancestor of CUIs {result['cui1']} and {result['cui2']} is {result['lca']} (depth: {result['depth']})."
     
     elif intent == "wu_palmer_similarity":
-        return f"The Wu-Palmer similarity between CUIs {result['cui1']} and {result['cui2']} is {result['similarity']:.4f}."
+        return f"The Wu-Palmer similarity between CUIs {result['cui1']} and {result['cui2']} is {result['similarity']:.4f}. Their lowest common ancestor is {result['lca']}."
+    
+    elif intent == "get_hpo_term":
+        return f"The HPO term for CUI {result['cui']} is '{result['hpo_term']}' with code {result['hpo_code']}."
     
     else:
-        return f"Here's the result for your query: {json.dumps(result, indent=2)}"
+        return f"Received response for intent '{intent}': {json.dumps(result, indent=2)}"
 
 @app.get("/health")
 async def health_check():

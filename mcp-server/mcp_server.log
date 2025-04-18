@@ -1,13 +1,6 @@
-nohup: ignoring input
-INFO:     Started server process [14882]
+INFO:     Will watch for changes in these directories: ['/home/ec2-user/umls-server/mcp-server']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [5199] using StatReload
+INFO:     Started server process [5205]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:mcp_app:Received request to process intent: search_terms with parameters: {'ontology': 'HPO', 'term': 'pneumonia'}
-INFO:mcp_app:Intent 'search_terms' mapped to endpoint '/terms' with method 'GET'
-ERROR:mcp_app:Missing required parameters: ['search']
-INFO:     146.70.58.196:34712 - "POST /process_intent HTTP/1.1" 400 Bad Request
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [14882]
