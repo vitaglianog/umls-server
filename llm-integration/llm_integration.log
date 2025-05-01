@@ -1,45 +1,11 @@
 INFO:     Will watch for changes in these directories: ['/home/ec2-user/umls-server/llm-integration']
 INFO:     Uvicorn running on http://0.0.0.0:8002 (Press CTRL+C to quit)
-INFO:     Started reloader process [16529] using StatReload
-INFO:     Started server process [16539]
+INFO:     Started reloader process [18220] using StatReload
+INFO:     Started server process [18230]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:app:Processing query: What is the depth of CUI C0001699?
+INFO:app:Processing query: What is the similarity between CUI C0001699 and C0004626?
 INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:app:LLM response: {"intent": "get_depth", "parameters": {"cui": "C0001699"}}
-INFO:app:Processing intent: get_depth with parameters: {'cui': 'C0001699'}
-INFO:httpx:HTTP Request: POST http://localhost:8001/process_intent "HTTP/1.1 200 OK"
-INFO:     50.114.87.96:49845 - "POST /query HTTP/1.1" 200 OK
-INFO:app:Processing query: What is the similarity between asthma and pneumonia?
-INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:app:LLM response: {"intent": "wu_palmer_similarity", "parameters": {"cui1": "C0004090", "cui2": "C0032280"}}
-INFO:app:Processing intent: wu_palmer_similarity with parameters: {'cui1': 'C0004090', 'cui2': 'C0032280'}
-INFO:httpx:HTTP Request: POST http://localhost:8001/process_intent "HTTP/1.1 200 OK"
-ERROR:app:Error from MCP Server: No common ancestor found
-INFO:     50.114.87.96:45314 - "POST /query HTTP/1.1" 200 OK
-INFO:app:Processing query: What is the least common ancestor between CUI C0011849 and C0011860?
-INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:app:LLM response: {"intent": "find_lca", "parameters": {"cui1": "C0011849", "cui2": "C0011860"}}
-INFO:app:Processing intent: find_lca with parameters: {'cui1': 'C0011849', 'cui2': 'C0011860'}
-INFO:httpx:HTTP Request: POST http://localhost:8001/process_intent "HTTP/1.1 200 OK"
-ERROR:app:Error from MCP Server: No common ancestor found
-INFO:     50.114.87.96:7750 - "POST /query HTTP/1.1" 200 OK
-INFO:app:Processing query: What is the least common ancestor between CUI C0001699 and C0004626?
-INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:app:LLM response: {"intent": "find_lca", "parameters": {"cui1": "C0001699", "cui2": "C0004626"}}
-INFO:app:Processing intent: find_lca with parameters: {'cui1': 'C0001699', 'cui2': 'C0004626'}
-INFO:httpx:HTTP Request: POST http://localhost:8001/process_intent "HTTP/1.1 200 OK"
-ERROR:app:Error from MCP Server: No common ancestor found
-INFO:     50.114.87.96:22112 - "POST /query HTTP/1.1" 200 OK
-INFO:app:Processing query: What is the least common ancestor between pneumonia and bacterial infection?
-INFO:httpx:HTTP Request: GET http://localhost:8001/intents "HTTP/1.1 200 OK"
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:app:LLM response: {"intent": "find_lca", "parameters": {"cui1": "C0032284", "cui2": "C0000738"}}
-INFO:app:Processing intent: find_lca with parameters: {'cui1': 'C0032284', 'cui2': 'C0000738'}
-INFO:httpx:HTTP Request: POST http://localhost:8001/process_intent "HTTP/1.1 200 OK"
-ERROR:app:Error from MCP Server: No common ancestor found
-INFO:     50.114.87.96:57558 - "POST /query HTTP/1.1" 200 OK
+INFO:app:LLM response: {"intent": "wu_palmer_similarity", "parameters": {"cui1": "C0001699", "cui2": "C0004626"}}
+INFO:app:Processing intent: wu_palmer_similarity with parameters: {'cui1': 'C0001699', 'cui2': 'C0004626'}
