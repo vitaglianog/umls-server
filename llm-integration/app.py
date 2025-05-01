@@ -79,7 +79,7 @@ async def process_intent(intent: str, parameters: Dict[str, Any]) -> Dict[str, A
     logger.info(f"Processing intent: {intent} with parameters: {parameters}")
     
     # Set a longer timeout for complex operations like Wu-Palmer similarity
-    timeout = 600.0 if intent == "wu_palmer_similarity" else 30.0
+    timeout = 600.0 if intent in ["wu_palmer_similarity", "find_lca"] else 30.0
     
     async with httpx.AsyncClient(timeout=timeout) as client:
         try:

@@ -1,6 +1,43 @@
 INFO:     Will watch for changes in these directories: ['/home/ec2-user/umls-server/umls_api']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [5198] using StatReload
-INFO:     Started server process [5202]
+INFO:     Started reloader process [16527] using StatReload
+INFO:     Started server process [16538]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:root:Attempting to connect to database...
+INFO:root:Database: umls_db
+INFO:root:User: root
+INFO:root:Successfully connected to database
+INFO:     127.0.0.1:60270 - "GET /cuis/C0001699/depth HTTP/1.1" 200 OK
+INFO:root:Computing Wu-Palmer similarity for C0004090 and C0032280
+INFO:root:Fetching ancestors for C0004090 and C0032280
+/home/ec2-user/umls-server/umls_api/app.py:99: RuntimeWarning: coroutine 'connect_db' was never awaited
+  with connect_db() as conn:
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+INFO:root:Common ancestors: set()
+INFO:     127.0.0.1:34234 - "GET /cuis/C0004090/C0032280/similarity/wu-palmer HTTP/1.1" 404 Not Found
+INFO:root:Fetching ancestors for C0011849 and C0011860
+INFO:root:Common ancestors: set()
+INFO:     127.0.0.1:34858 - "GET /cuis/C0011849/C0011860/lca HTTP/1.1" 404 Not Found
+INFO:root:Fetching ancestors for C0001699 and C0004626
+INFO:root:Common ancestors: set()
+INFO:     127.0.0.1:34508 - "GET /cuis/C0001699/C0004626/lca HTTP/1.1" 404 Not Found
+INFO:root:Fetching ancestors for C0032284 and C0000738
+INFO:root:Common ancestors: set()
+INFO:     127.0.0.1:32902 - "GET /cuis/C0032284/C0000738/lca HTTP/1.1" 404 Not Found
+WARNING:  StatReload detected changes in 'app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16538]
+INFO:     Started server process [16736]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16736]
+INFO:     Started server process [16741]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.

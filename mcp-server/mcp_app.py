@@ -47,15 +47,10 @@ INTENT_MAPPINGS = {
         "method": "GET",
         "params": ["cui"]
     },
-    "get_relations": {
-        "endpoint": "/cuis/{cui}/relations",
-        "method": "GET",
-        "params": ["cui"]
-    },
     "get_cui_from_ontology": {
-        "endpoint": "/ontologies/{source}/{code}/cui",
+        "endpoint": "/ontology/{ontology}/code/{code}",
         "method": "GET",
-        "params": ["source", "code"]
+        "params": ["ontology", "code"]
     },
     "find_lca": {
         "endpoint": "/cuis/{cui1}/{cui2}/lca",
@@ -175,7 +170,7 @@ async def process_intent(request: IntentRequest):
     
     try:
         # Increase timeout for complex operations like Wu-Palmer similarity
-        timeout = 600.0 if intent == "wu_palmer_similarity" else 30.0
+        timeout = 600.0 if intent in ["wu_palmer_similarity", "find_lca"] else 30.0
         
         async with httpx.AsyncClient(timeout=timeout) as client:
             if method == "GET":
