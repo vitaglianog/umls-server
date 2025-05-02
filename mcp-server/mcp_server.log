@@ -11,3 +11,83 @@ INFO:mcp_app:Formatted endpoint URL: /cuis/C0001699/C0004626/similarity/wu-palme
 INFO:mcp_app:Path parameters: {'cui1': 'C0001699', 'cui2': 'C0004626'}
 INFO:mcp_app:Query parameters: {}
 INFO:mcp_app:Calling UMLS API: http://localhost:8000/cuis/C0001699/C0004626/similarity/wu-palmer with params: {}
+INFO:httpx:HTTP Request: GET http://localhost:8000/cuis/C0001699/C0004626/similarity/wu-palmer "HTTP/1.1 200 OK"
+INFO:mcp_app:Received response from UMLS API: {"cui1":"C0001699","cui2":"C0004626","lca":"C1135584","depth_c1":11,"depth_c2":11,"depth_lca":10,"similarity":0.9090909090909091}
+INFO:     127.0.0.1:34082 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39512 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Received request to process intent: wu_palmer_similarity with parameters: {'cui1': 'C0004090', 'cui2': 'C0032280'}
+INFO:mcp_app:Intent 'wu_palmer_similarity' mapped to endpoint '/cuis/{cui1}/{cui2}/similarity/wu-palmer' with method 'GET'
+INFO:mcp_app:Formatted endpoint URL: /cuis/C0004090/C0032280/similarity/wu-palmer
+INFO:mcp_app:Path parameters: {'cui1': 'C0004090', 'cui2': 'C0032280'}
+INFO:mcp_app:Query parameters: {}
+INFO:mcp_app:Calling UMLS API: http://localhost:8000/cuis/C0004090/C0032280/similarity/wu-palmer with params: {}
+INFO:httpx:HTTP Request: GET http://localhost:8000/cuis/C0004090/C0032280/similarity/wu-palmer "HTTP/1.1 500 Internal Server Error"
+INFO:mcp_app:Received response from UMLS API: {"detail":""}
+ERROR:mcp_app:HTTP error: {"detail":""}
+ERROR:mcp_app:Request error: 
+INFO:     127.0.0.1:39522 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Received request to process intent: search_cui with parameters: {'query': 'pneumonia'}
+INFO:mcp_app:Intent 'search_cui' mapped to endpoint '/cuis' with method 'GET'
+INFO:mcp_app:Formatted endpoint URL: /cuis
+INFO:mcp_app:Path parameters: {}
+INFO:mcp_app:Query parameters: {'query': 'pneumonia'}
+INFO:mcp_app:Calling UMLS API: http://localhost:8000/cuis with params: {'query': 'pneumonia'}
+INFO:httpx:HTTP Request: GET http://localhost:8000/cuis?query=pneumonia "HTTP/1.1 200 OK"
+INFO:mcp_app:Received response from UMLS API: {"query":"pneumonia","cuis":[{"cui":"C0001311","name":"Capillary pneumonia"},{"cui":"C0001311","name":"Capillary pneumonia"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae"},{"cui":"C0001699","name":"klebsiella pneumoniae"},{"cui":"C0001699","name":"klebsiella pneumoniae"},{"cui":"C0001699","name":"KLEBSIELLA PNEUMONIAE"},{"cui":"C0001699","name":"Bacillus pneumoniae"},{"cui":"C0001699","name":"Bacillus pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae aerogenes"},{"cui":"C0001699","name":"Klebsiella pneumoniae aerogenes"},{"cui":"C0001699","name":"Bacterium pneumoniae crouposae"},{"cui":"C0001699","name":"Bacterium pneumoniae crouposae"},{"cui":"C0001699","name":"Hyalococcus pneumoniae"},{"cui":"C0001699","name":"Hyalococcus pneumoniae"},{"cui":"C0001699","name":"Klebsiella pneumoniae (organism)"},{"cui":"C0001699","name":"K. pneumoniae"},{"cui":"C0002106","name":"Pneumonia, allergic"},{"cui":"C0002106","name":"Allergic pneumonia"},{"cui":"C0002106","name":"PNEUMONIA, ALLERGIC"},{"cui":"C0002106","name":"PNEUMONIA, EXTRINSIC ALLERGIC"},{"cui":"C0002106","name":"Allergic pneumonia (disorder)"},{"cui":"C0002390","name":"hypersensitivity pneumonia"},{"cui":"C0002390","name":"Hypersensitivity pneumonia"},{"cui":"C0002390","name":"Hypersensitivity pneumonia, NOS"},{"cui":"C0004626","name":"Pneumonia, Bacterial"},{"cui":"C0004626","name":"Bacterial pneumonia"},{"cui":"C0004626","name":"bacterial pneumonia"},{"cui":"C0004626","name":"bacterial pneumonia"},{"cui":"C0004626","name":"pneumonia bacterial"},{"cui":"C0004626","name":"Bacterial Pneumonias"},{"cui":"C0004626","name":"Pneumonias, Bacterial"},{"cui":"C0004626","name":"Bacterial pneumonia, NOS"},{"cui":"C0004626","name":"Bacterial pneumonia NOS"},{"cui":"C0004626","name":"Bacterial pneumonia NOS"},{"cui":"C0004626","name":"Bacterial pneumonia NOS"},{"cui":"C0004626","name":"Bacterial pneumonia NOS"},{"cui":"C0004626","name":"Bacterial Pneumonia"},{"cui":"C0004626","name":"Bacterial Pneumonia"},{"cui":"C0004626","name":"Bacterial Pneumonia"}]}
+INFO:     127.0.0.1:59882 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55836 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Received request to process intent: get_cui_info with parameters: {'cui': 'C0001699'}
+INFO:mcp_app:Intent 'get_cui_info' mapped to endpoint '/cuis/{cui}' with method 'GET'
+INFO:mcp_app:Formatted endpoint URL: /cuis/C0001699
+INFO:mcp_app:Path parameters: {'cui': 'C0001699'}
+INFO:mcp_app:Query parameters: {}
+INFO:mcp_app:Calling UMLS API: http://localhost:8000/cuis/C0001699 with params: {}
+INFO:httpx:HTTP Request: GET http://localhost:8000/cuis/C0001699 "HTTP/1.1 200 OK"
+INFO:mcp_app:Received response from UMLS API: {"cui":"C0001699","name":"Klebsiella pneumoniae"}
+INFO:     127.0.0.1:55846 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46508 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Received request to process intent: search_terms with parameters: {'search': 'diabetes mellitus', 'ontology': 'HPO'}
+INFO:mcp_app:Intent 'search_terms' mapped to endpoint '/terms' with method 'GET'
+INFO:mcp_app:Formatted endpoint URL: /terms
+INFO:mcp_app:Path parameters: {}
+INFO:mcp_app:Query parameters: {'search': 'diabetes mellitus', 'ontology': 'HPO'}
+INFO:mcp_app:Calling UMLS API: http://localhost:8000/terms with params: {'search': 'diabetes mellitus', 'ontology': 'HPO'}
+INFO:httpx:HTTP Request: GET http://localhost:8000/terms?search=diabetes%20mellitus&ontology=HPO "HTTP/1.1 200 OK"
+INFO:mcp_app:Received response from UMLS API: {"results":[{"code":"HP:0000819","term":"Diabetes mellitus","description":"A metabolic disorder characterized by abnormally high blood sugar levels due to diminished production of insulin or insulin resistance/desensitization."},{"code":"HP:0100651","term":"Insulin-dependent diabetes mellitus","description":"A subtype of DIABETES MELLITUS that is characterized by INSULIN deficiency. It is manifested by the sudden onset of severe HYPERGLYCEMIA, rapid progression to DIABETIC KETOACIDOSIS, and DEATH unless treated with insulin. The disease may occur at any age, but is most common in childhood or adolescence."}]}
+INFO:     127.0.0.1:46522 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36766 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Received request to process intent: get_depth with parameters: {'cui': 'C0001699'}
+INFO:mcp_app:Intent 'get_depth' mapped to endpoint '/cuis/{cui}/depth' with method 'GET'
+INFO:mcp_app:Formatted endpoint URL: /cuis/C0001699/depth
+INFO:mcp_app:Path parameters: {'cui': 'C0001699'}
+INFO:mcp_app:Query parameters: {}
+INFO:mcp_app:Calling UMLS API: http://localhost:8000/cuis/C0001699/depth with params: {}
+INFO:httpx:HTTP Request: GET http://localhost:8000/cuis/C0001699/depth "HTTP/1.1 200 OK"
+INFO:mcp_app:Received response from UMLS API: {"cui":"C0001699","depth":11}
+INFO:     127.0.0.1:36780 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32880 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Received request to process intent: find_lca with parameters: {'cui1': 'C0001699', 'cui2': 'C0004626'}
+INFO:mcp_app:Intent 'find_lca' mapped to endpoint '/cuis/{cui1}/{cui2}/lca' with method 'GET'
+INFO:mcp_app:Formatted endpoint URL: /cuis/C0001699/C0004626/lca
+INFO:mcp_app:Path parameters: {'cui1': 'C0001699', 'cui2': 'C0004626'}
+INFO:mcp_app:Query parameters: {}
+INFO:mcp_app:Calling UMLS API: http://localhost:8000/cuis/C0001699/C0004626/lca with params: {}
+INFO:httpx:HTTP Request: GET http://localhost:8000/cuis/C0001699/C0004626/lca "HTTP/1.1 200 OK"
+INFO:mcp_app:Received response from UMLS API: {"cui1":"C0001699","cui2":"C0004626","lca":"C1135584","depth":10}
+INFO:     127.0.0.1:32894 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45388 - "GET /intents HTTP/1.1" 200 OK
+INFO:mcp_app:Received request to process intent: wu_palmer_similarity with parameters: {'cui1': 'C0001699', 'cui2': 'C0004626'}
+INFO:mcp_app:Intent 'wu_palmer_similarity' mapped to endpoint '/cuis/{cui1}/{cui2}/similarity/wu-palmer' with method 'GET'
+INFO:mcp_app:Formatted endpoint URL: /cuis/C0001699/C0004626/similarity/wu-palmer
+INFO:mcp_app:Path parameters: {'cui1': 'C0001699', 'cui2': 'C0004626'}
+INFO:mcp_app:Query parameters: {}
+INFO:mcp_app:Calling UMLS API: http://localhost:8000/cuis/C0001699/C0004626/similarity/wu-palmer with params: {}
+INFO:httpx:HTTP Request: GET http://localhost:8000/cuis/C0001699/C0004626/similarity/wu-palmer "HTTP/1.1 200 OK"
+INFO:mcp_app:Received response from UMLS API: {"cui1":"C0001699","cui2":"C0004626","lca":"C1135584","depth_c1":11,"depth_c2":11,"depth_lca":10,"similarity":0.9090909090909091}
+INFO:     127.0.0.1:45400 - "POST /process_intent HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18229]
+INFO:     Stopping reloader process [18219]
