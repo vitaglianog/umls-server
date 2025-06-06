@@ -1,0 +1,26 @@
+{
+  "_comment": "Sample Claude Desktop configuration for UMLS MCP Server",
+  "_instructions": [
+    "1. Find your conda environment path: 'conda info --envs'",
+    "2. Replace '/path/to/conda/envs/umls-server/bin/python' with your actual conda Python path",
+    "3. Replace '/path/to/umls-server' with your actual project directory path",
+    "4. Make sure the UMLS API is running on port 8000",
+    "5. Restart Claude Desktop after making changes"
+  ],
+  "_examples": {
+    "macOS": "/Users/username/miniconda3/envs/umls-server/bin/python",
+    "Linux": "/home/username/miniconda3/envs/umls-server/bin/python",
+    "Windows": "C:\\Users\\username\\miniconda3\\envs\\umls-server\\python.exe"
+  },
+  "mcpServers": {
+    "umls-server": {
+      "command": "/path/to/conda/envs/umls-server/bin/python",
+      "args": [
+        "/path/to/umls-server/mcp-server/umls_mcp_server.py"
+      ],
+      "env": {
+        "UMLS_API_URL": "http://localhost:8000"
+      }
+    }
+  }
+} 

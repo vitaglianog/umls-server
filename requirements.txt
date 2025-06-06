@@ -1,5 +1,11 @@
+# UMLS API dependencies
 fastapi
 uvicorn 
 pymysql
-python_dotenv
+python-dotenv
 beautifulsoup4
+
+# MCP Server dependencies
+mcp>=1.0.0
+httpx>=0.25.0
+pydantic>=2.10.0
