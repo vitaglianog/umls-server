@@ -23,18 +23,37 @@ async def connect_db():
         logging.info("Attempting to connect to database...")
         logging.info(f"Database: {os.getenv('DB_NAME')}")
         logging.info(f"User: {os.getenv('DB_USER')}")
+        logging.info(f"Host: {os.getenv('DB_HOST', 'localhost')}")
         
-        conn = await aiomysql.connect(
-            unix_socket='/var/lib/mysql/mysql.sock',  # Use Unix socket for local connections
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            db=os.getenv("DB_NAME"),
-            cursorclass=aiomysql.DictCursor,
-            autocommit=True,
-            connect_timeout=10,
-            charset='utf8mb4',
-            use_unicode=True
-        )
+        # Use Docker-compatible connection or fallback to unix socket for local dev
+        db_host = os.getenv("DB_HOST")
+        if db_host and db_host != "localhost":
+            # Docker connection
+            conn = await aiomysql.connect(
+                host=db_host,
+                port=int(os.getenv("DB_PORT", 3306)),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                db=os.getenv("DB_NAME"),
+                cursorclass=aiomysql.DictCursor,
+                autocommit=True,
+                connect_timeout=10,
+                charset='utf8mb4',
+                use_unicode=True
+            )
+        else:
+            # Local development with unix socket
+            conn = await aiomysql.connect(
+                unix_socket='/var/lib/mysql/mysql.sock',
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                db=os.getenv("DB_NAME"),
+                cursorclass=aiomysql.DictCursor,
+                autocommit=True,
+                connect_timeout=10,
+                charset='utf8mb4',
+                use_unicode=True
+            )
         logging.info("Successfully connected to database")
         return conn
     except Exception as e:

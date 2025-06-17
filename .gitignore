@@ -1,1 +1,56 @@
+# Environment files
 .env
+*.env
+
+# Log files
+*.log
+logs/
+mcp_server.log
+umls_api.log
+llm_integration.log
+
+# Personal configuration files
+claude_desktop_config.json
+config.json
+
+# Database files (too large for git)
+umls-data/
+*.sql
+*.dump
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker volumes and temporary files
+docker-compose.override.yml
+*.tar.gz
+*.zip
+
+# Backup files
+backups/
+*.backup

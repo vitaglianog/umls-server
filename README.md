@@ -4,7 +4,41 @@ A two-tier architecture for providing natural language access to the Unified Med
 
 ## 🚀 Quick Setup Guide
 
-**Want to get started fast? Follow these steps:**
+**Want to get started fast? Choose your setup method:**
+
+### 🐳 Option 1: Docker Setup (Recommended)
+
+1. **Prerequisites**: 
+   - Docker and Docker Compose installed
+   - UMLS license and data files from NCBI
+   - At least 12GB RAM available for Docker
+   - At least 100GB disk space for UMLS data
+
+2. **Setup Environment**:
+   ```bash
+   git clone <repository-url>
+   cd umls-server
+   cp docker.env .env
+   ```
+
+3. **Configure Docker Desktop** (Important!):
+   - Open Docker Desktop → Settings → Resources
+   - Memory: Set to 12-16GB (if you have 16GB+ system RAM)
+   - CPUs: Set to 6+ cores if available
+   - Disk: Ensure 100GB+ available to Docker
+   - **Restart Docker Desktop** after making changes
+
+4. **Start Services**:
+   ```bash
+   docker compose up -d mysql
+   # Load UMLS data (see detailed instructions below)
+   ./scripts/load_umls_2025aa.sh
+   docker compose up -d
+   ```
+
+5. **Test**: `curl "http://localhost:8000/terms?search=diabetes&ontology=HPO"`
+
+### 🐍 Option 2: Local Python Setup
 
 1. **Prerequisites**: Install Python 3.8+, Conda, and Claude Desktop
 
@@ -62,9 +96,22 @@ The UMLS server consists of two components:
    uvicorn app:app --host 0.0.0.0 --port 8000
    ```
 
-3. Configure Claude Desktop with the provided `claude_desktop_config.json` (update paths):
+3. Configure Claude Desktop using the provided template (copy `claude_desktop_config.json` and update paths):
    ```json
    {
+     "_comment": "Sample Claude Desktop configuration for UMLS MCP Server",
+     "_instructions": [
+       "1. Find your conda environment path: 'conda info --envs'",
+       "2. Replace '/path/to/conda/envs/umls-server/bin/python' with your actual conda Python path",
+       "3. Replace '/path/to/umls-server' with your actual project directory path",
+       "4. Make sure the UMLS API is running on port 8000",
+       "5. Restart Claude Desktop after making changes"
+     ],
+     "_examples": {
+       "macOS": "/Users/username/miniconda3/envs/umls-server/bin/python",
+       "Linux": "/home/username/miniconda3/envs/umls-server/bin/python",
+       "Windows": "C:\\Users\\username\\miniconda3\\envs\\umls-server\\python.exe"
+     },
      "mcpServers": {
        "umls-server": {
          "command": "/path/to/conda/envs/umls-server/bin/python",
@@ -81,26 +128,16 @@ The UMLS server consists of two components:
 
 4. Restart Claude Desktop and start using natural language to query UMLS!
 
-## 🌟 Quick Start: Using the EC2 Instance
+## 🌟 Example API Usage
 
-The UMLS server is deployed on an EC2 instance at `52.43.228.165`. To use it:
+Once your UMLS server is running, you can test the API endpoints:
 
-1. Ensure you are on the Geneial VPN
-2. Make sure the EC2 instance is running (costs ~50c/hour)
-3. The UMLS server starts automatically when the instance is on
-4. The server shuts down automatically at midnight ET every night
-
-To manually start the server on EC2:
 ```sh
-ssh -i "umls-server.pem" ec2-user@ec2-52-43-228-165.us-west-2.compute.amazonaws.com
-cd umls-server/umls_api
-uvicorn app:app --host 0.0.0.0 --port 8000
-```
+# Search for terms in HPO ontology
+curl "http://localhost:8000/terms?search=cancer&ontology=HPO"
 
-Example API usage:
-```sh
-# Search for terms
-curl "http://52.43.228.165:8000/terms?search=cancer&ontology=HPO"
+# Search for SNOMED CT terms
+curl "http://localhost:8000/terms?search=diabetes&ontology=SNOMEDCT_US"
 
 # Response format:
 {
@@ -113,6 +150,88 @@ curl "http://52.43.228.165:8000/terms?search=cancer&ontology=HPO"
   ]
 }
 ```
+
+**For cloud deployment:** Replace `localhost:8000` with your server's IP address or domain.
+
+## 🎯 System Requirements & Resource Planning
+
+### Minimum System Requirements
+- **Host Memory**: 16GB+ recommended (8GB minimum)
+- **Docker Memory**: 12GB+ recommended (8GB minimum)
+- **Docker CPUs**: 6+ cores recommended (4 minimum)
+- **Disk Space**: 100GB+ free space recommended
+- **Raw UMLS Data**: ~25GB
+- **Final Database Size**: 30-40GB
+- **Peak Space During Loading**: 60-80GB
+
+### Loading Timeline
+
+Expected loading times on modern hardware:
+
+| Phase | Duration | Disk Usage |
+|-------|----------|------------|
+| **Setup** | 5 min | +1GB |
+| **MRCONSO** | 30-60 min | +15GB |
+| **MRDEF** | 5-10 min | +3GB |
+| **MRHIER** | 60-120 min | +25GB |
+| **MRREL** | 90-180 min | +30GB |
+| **Indexes** | 30-60 min | +15GB |
+| **Cleanup** | 10 min | -20GB |
+| **Total** | 3-7 hours | 30-40GB final |
+
+## 📥 Loading UMLS Data (Detailed Instructions)
+
+### Step 1: Obtain UMLS Data
+
+1. Visit [UMLS Terminology Services](https://uts.nlm.nih.gov/uts/)
+2. Create an account and accept the license agreement
+3. Download the UMLS Metathesaurus files (2025AA release recommended)
+4. Extract the `.RRF` files
+
+### Step 2: Prepare Data Files
+
+Place the following files in the `umls-data/` directory:
+- `MRCONSO.RRF` - Concept names and sources (~2.1GB)
+- `MRDEF.RRF` - Definitions (~124MB)
+- `MRHIER.RRF` - Hierarchical relationships (~5.5GB)
+- `MRREL.RRF` - Related concepts (~5.7GB)
+- `MRSTY.RRF` - Semantic types (~205MB)
+- `MRSAT.RRF` - Attributes (~8.8GB, optional)
+
+### Step 3: Pre-Loading Checklist
+
+Before starting the data load, verify:
+
+**System Resources:**
+- [ ] Docker Desktop has 12GB+ RAM allocated
+- [ ] Docker has 100GB+ disk space available
+- [ ] Host system has sufficient free space
+- [ ] Docker Desktop restarted after resource changes
+
+**Database Setup:**
+- [ ] MySQL container is running (`docker compose ps`)
+- [ ] Database connection tested
+- [ ] No other heavy processes running
+
+**Data Preparation:**
+- [ ] UMLS 2025AA files in `umls-data/` directory
+- [ ] All required .RRF files present
+- [ ] Files are not corrupted
+
+### Step 4: Load Data
+
+Run the loading script:
+```bash
+./scripts/load_umls_2025aa.sh
+```
+
+This script will:
+- Create the necessary UMLS table structures
+- Load data from .RRF files with progress tracking
+- Create optimized indexes for API performance
+- Verify the data load with statistics
+
+**Note**: Loading can take 3-7 hours depending on your hardware and data size.
 
 ## 🏗 Architecture
 
@@ -192,7 +311,218 @@ The MCP server provides these tools to Claude Desktop:
 `GET /cuis/{cui}/hpo`
 - Retrieves the HPO term and its corresponding code associated with a given CUI.
 
-## 📦 Installation
+## 🏗️ UMLS Database Schema
+
+The setup creates these main tables:
+
+### MRCONSO (Concept Names and Sources)
+- Primary table containing all concept information
+- Key fields: CUI, STR, SAB, CODE, TTY
+- Indexes on CUI, SAB, CODE, STR, AUI
+
+### MRDEF (Definitions)
+- Contains definitions for concepts
+- Key fields: CUI, DEF, SAB
+- Linked to MRCONSO via CUI
+
+### MRHIER (Hierarchical Relationships)  
+- Contains parent-child relationships
+- Key fields: CUI, PTR, SAB
+- Used for ancestor/descendant queries
+
+### MRREL (Related Concepts)
+- Contains relationships between concepts
+- Key fields: CUI1, CUI2, REL, RELA
+- Used for similarity calculations
+
+## 🛠️ Management Commands
+
+### Start Services
+```bash
+# Start MySQL only
+docker compose up -d mysql
+
+# Start all services
+docker compose up -d
+
+# Start with logs
+docker compose up
+```
+
+### Monitor Services
+```bash
+# View logs
+docker compose logs -f
+
+# View MySQL logs specifically  
+docker compose logs -f mysql
+
+# View API logs specifically
+docker compose logs -f umls-api
+```
+
+### Database Management
+```bash
+# Connect to MySQL
+docker exec -it umls-mysql mysql -u umls_user -p umls
+
+# Backup database
+docker exec umls-mysql mysqldump -u umls_user -p umls > umls_backup.sql
+
+# Restore database
+docker exec -i umls-mysql mysql -u umls_user -p umls < umls_backup.sql
+```
+
+### Cleanup
+```bash
+# Stop services
+docker compose down
+
+# Remove all data (⚠️ This will delete your UMLS database!)
+docker compose down -v
+
+# Remove images
+docker compose down --rmi all
+```
+
+## 🔧 Troubleshooting
+
+### Container Issues
+
+**MySQL container won't start:**
+```bash
+# Check logs
+docker compose logs mysql
+
+# Common issues:
+# - Insufficient memory (need at least 8GB)
+# - Port 3306 already in use
+# - Permission issues with volumes
+```
+
+**API container can't connect to MySQL:**
+```bash
+# Verify MySQL is running
+docker compose ps
+
+# Check network connectivity
+docker exec umls-api ping mysql
+
+# Verify environment variables
+docker exec umls-api env | grep DB_
+```
+
+### Performance Issues
+
+**Slow queries:**
+- Ensure indexes are created (run the load script)
+- Increase MySQL buffer pool size in docker-compose.yml
+- Monitor with: `docker stats`
+
+**High memory usage:**
+- Adjust `innodb_buffer_pool_size` in docker-compose.yml
+- Monitor with: `docker exec umls-mysql mysql -e "SHOW ENGINE INNODB STATUS"`
+
+### Data Loading Issues
+
+**Load script fails:**
+```bash
+# Check if files exist
+ls -la umls-data/
+
+# Verify file format (should be pipe-delimited)
+head -n 5 umls-data/MRCONSO.RRF
+
+# Check MySQL permissions
+docker exec umls-mysql mysql -u umls_user -p -e "SELECT USER(), DATABASE();"
+```
+
+### Resource Monitoring During Load
+
+**Monitor system resources:**
+```bash
+# Check Docker resource usage
+docker stats --no-stream
+
+# Monitor disk space in real-time
+watch -n 30 'docker system df && df -h'
+
+# Monitor MySQL data directory
+docker exec umls-mysql df -h /var/lib/mysql
+```
+
+**Monitor MySQL processes:**
+```bash
+# Check active queries
+docker exec umls-mysql mysql -u umls_user -p -e "SHOW PROCESSLIST;"
+
+# Monitor MySQL status
+docker exec umls-mysql mysql -u umls_user -p -e "SHOW ENGINE INNODB STATUS\G"
+```
+
+### Space Management
+
+**If you run out of space during loading:**
+```bash
+# Clean Docker cache
+docker system prune -a -f
+docker volume prune -f
+
+# Remove unused images
+docker image prune -a -f
+
+# Check MySQL data usage
+docker exec umls-mysql du -sh /var/lib/mysql
+```
+
+**Emergency space recovery:**
+```bash
+# Stop containers
+docker compose down
+
+# Clean everything except volumes
+docker system prune -a -f
+
+# Remove temporary files
+docker exec umls-mysql find /tmp -name "*.RRF" -delete
+
+# Restart with more space
+docker compose up -d mysql
+```
+
+## 📊 Performance Tuning
+
+### MySQL Optimization
+
+For production use, consider adjusting these MySQL settings in `docker-compose.yml`:
+
+```yaml
+command: >
+  --innodb_buffer_pool_size=4G
+  --innodb_log_file_size=512M
+  --max_connections=500
+  --query_cache_size=128M
+  --tmp_table_size=64M
+  --max_heap_table_size=64M
+```
+
+### Query Performance
+
+With proper indexing, expect:
+- **Simple term searches**: < 100ms
+- **Complex relationship queries**: 200ms - 2s
+- **Hierarchical traversals**: 100ms - 1s
+- **Cross-ontology mappings**: 500ms - 5s
+
+## 🔒 Security Considerations
+
+- Change default passwords in `.env` file
+- Restrict MySQL port access if not needed externally
+- Use firewall rules to limit API access
+- Keep UMLS data secure and comply with license terms
+- Regular security updates for Docker images
+
+## 📦 Installation (Advanced/Local Setup)
 
 ### Prerequisites
 
@@ -290,7 +620,7 @@ sudo systemctl start umls-api
 - Make sure port 8000 is open in your EC2 Security Group for API access
 - The MCP server runs locally and communicates with Claude Desktop via stdio
 
-## 🛠 Troubleshooting
+## 🛠 Troubleshooting (Local Setup)
 
 ### UMLS API Issues
 - **API not accessible?** Make sure the conda environment is activated and port 8000 is open
@@ -306,6 +636,14 @@ sudo systemctl start umls-api
 - **Import errors?** Ensure you've activated the conda environment and installed all dependencies
 - **API connection errors?** Check that the UMLS API is running on port 8000
 
+## 📝 Next Steps
+
+1. **Configure Claude Desktop**: Update your `claude_desktop_config.json` to use `http://localhost:8000`
+2. **Load Additional Ontologies**: Customize the loading script for specific vocabularies
+3. **Set Up Monitoring**: Add health checks and monitoring
+4. **Backup Strategy**: Implement regular database backups
+5. **Scale**: Consider read replicas for high-traffic scenarios
+
 ## 🤝 Contributing
 
 1. Fork the repo & create a new branch (`feature-name`)
@@ -318,5 +656,5 @@ MIT License
 
 ---
 
-🚀 Now you're ready to query UMLS with natural language through Claude Desktop!
+🎉 **Success!** You now have a powerful UMLS natural language interface running with Docker and MySQL! Your system can handle millions of medical records with optimized performance for real-time queries through Claude Desktop.
 

@@ -1,0 +1,61 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: umls-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-umls_root_password}
+      MYSQL_DATABASE: ${DB_NAME:-umls}
+      MYSQL_USER: ${DB_USER:-umls_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-umls_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+      - ./umls-data:/umls-data
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+      --max_connections=1000
+      --innodb_buffer_pool_size=2G
+      --innodb_log_file_size=256M
+      --sql_mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+      --local_infile=1
+      --secure_file_priv=""
+      --skip-log-bin
+      --innodb_undo_log_truncate=ON
+      --innodb_max_undo_log_size=536870912
+    networks:
+      - umls-network
+    restart: unless-stopped
+
+  umls-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: umls-api
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-umls}
+      DB_USER: ${DB_USER:-umls_user}
+      DB_PASSWORD: ${DB_PASSWORD:-umls_password}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+    networks:
+      - umls-network
+    restart: unless-stopped
+    volumes:
+      - ./umls_api:/app
+      - ./logs:/app/logs
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  umls-network:
+    driver: bridge 
