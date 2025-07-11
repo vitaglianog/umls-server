@@ -190,7 +190,7 @@ Expected loading times on modern hardware:
 
 ### Step 2: Prepare Data Files
 
-Place the following files in the `umls-data/` directory:
+Unzip your full 2025AA release folder into the `umls-data` folder. This should result in the following files being located within `umls-data/2025AA/META` directory:
 - `MRCONSO.RRF` - Concept names and sources (~2.1GB)
 - `MRDEF.RRF` - Definitions (~124MB)
 - `MRHIER.RRF` - Hierarchical relationships (~5.5GB)
