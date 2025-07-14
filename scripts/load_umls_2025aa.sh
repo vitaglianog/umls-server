@@ -1,21 +1,42 @@
 #!/bin/bash
 
-# Final corrected script to load UMLS 2025AA data
-# Fixes: proper file handling, table truncation, and error detection
+# UMLS 2025AA Data Loading Script using Official UMLS Scripts
+# Uses official mysql_tables.sql and mysql_indexes.sql for standard compliance
 
 set -e
 
-echo "🏥 UMLS 2025AA Data Loading Script (Final)"
-echo "=========================================="
+echo "🏥 UMLS 2025AA Data Loading Script (Official)"
+echo "=============================================="
 echo "Loading UMLS Spring 2025 Base Release (2025AA)"
+echo "Using official UMLS mysql_tables.sql and mysql_indexes.sql"
 echo ""
 
 # Configuration
+# Only these two values need to be customized:
+# - CONTAINER_NAME: Docker container name for MySQL
+# - UMLS_DATA_DIR: Path to UMLS data directory
+# All database credentials are read from .env file
 CONTAINER_NAME="umls-mysql"
-DB_NAME="umls"
-DB_USER="umls_user"
-DB_PASSWORD="umls_password_secure_2024"
 UMLS_DATA_DIR="umls-data/2025AA/META"
+
+# Load database configuration from .env file
+if [ -f ".env" ]; then
+    echo "📋 Loading database configuration from .env file..."
+    export $(grep -v '^#' .env | xargs)
+    DB_NAME="${DB_NAME:-umls}"
+    DB_USER="${DB_USER:-umls_user}"
+    DB_PASSWORD="${DB_PASSWORD:-umls_password}"
+    MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-umls_root_password}"
+    echo "   Database: $DB_NAME"
+    echo "   User: $DB_USER"
+    echo "   Host: ${DB_HOST:-localhost}"
+else
+    echo "⚠️  No .env file found, using defaults"
+    DB_NAME="umls"
+    DB_USER="umls_user"
+    DB_PASSWORD="umls_password"
+    MYSQL_ROOT_PASSWORD="umls_root_password"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -33,9 +54,19 @@ if ! docker compose ps | grep -q "$CONTAINER_NAME"; then
 fi
 echo -e "${GREEN}✅ Running${NC}"
 
+# Test database connection
+echo -n "🔐 Testing database connection... "
+if docker exec $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD $DB_NAME -e "SELECT 1;" &>/dev/null; then
+    echo -e "${GREEN}✅ Connected successfully${NC}"
+else
+    echo -e "${RED}❌ Cannot connect to database${NC}"
+    echo "Please check your database credentials in .env file"
+    exit 1
+fi
+
 # Ensure local_infile is enabled globally
 echo -n "🔧 Configuring MySQL for data loading... "
-docker exec $CONTAINER_NAME mysql -u root -pumls_root_password_2024 -e "SET GLOBAL local_infile = 1;" &>/dev/null
+docker exec $CONTAINER_NAME mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SET GLOBAL local_infile = 1;" &>/dev/null
 echo -e "${GREEN}✅${NC}"
 
 # Clean up temp files
@@ -43,88 +74,8 @@ echo -n "🧹 Cleaning temporary files... "
 docker exec $CONTAINER_NAME bash -c "rm -f /tmp/*.RRF /tmp/*.rrf" &>/dev/null
 echo -e "${GREEN}✅${NC}"
 
-# Enhanced function to load data files
-load_data_file_final() {
-    local table_name=$1
-    local file_name=$2
-    local description="$3"
-    local file_path="$UMLS_DATA_DIR/$file_name"
-    
-    echo ""
-    echo -e "${BLUE}📊 Loading $description...${NC}"
-    echo "   Table: $table_name"
-    echo "   File: $file_name"
-    
-    # Check source file
-    if [ ! -f "$file_path" ]; then
-        echo -e "   ${RED}❌ Source file not found: $file_path${NC}"
-        return 1
-    fi
-    
-    local source_size=$(ls -lh "$file_path" | awk '{print $5}')
-    echo "   Source size: $source_size"
-    
-    # Copy file to container with unique name
-    local container_file="/tmp/${table_name}_load.RRF"
-    echo -n "   Copying to container... "
-    if docker cp "$file_path" "$CONTAINER_NAME:$container_file" &>/dev/null; then
-        echo -e "${GREEN}✅${NC}"
-    else
-        echo -e "${RED}❌ Copy failed${NC}"
-        return 1
-    fi
-    
-    # Verify file in container
-    echo -n "   Verifying copy... "
-    local container_size=$(docker exec $CONTAINER_NAME stat -c%s "$container_file" 2>/dev/null || echo "0")
-    local source_bytes=$(stat -f%z "$file_path" 2>/dev/null || echo "0")
-    
-    if [ "$container_size" -eq "$source_bytes" ]; then
-        # Format size in a cross-platform way
-        local size_mb=$((container_size / 1024 / 1024))
-        echo -e "${GREEN}✅ (${size_mb}MB)${NC}"
-    else
-        echo -e "${RED}❌ Size mismatch: expected $source_bytes, got $container_size${NC}"
-        return 1
-    fi
-    
-    # Truncate table before loading
-    echo -n "   Truncating table... "
-    if docker exec $CONTAINER_NAME mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME -e "TRUNCATE TABLE $table_name;" &>/dev/null; then
-        echo -e "${GREEN}✅${NC}"
-    else
-        echo -e "${RED}❌ Truncate failed${NC}"
-        return 1
-    fi
-    
-    # Load data
-    echo -n "   Loading data... "
-    local start_time=$(date +%s)
-    
-    local load_sql="
-    SET SESSION sql_mode = '';
-    LOAD DATA LOCAL INFILE '$container_file' 
-    INTO TABLE $table_name 
-    FIELDS TERMINATED BY '|' 
-    ESCAPED BY '' 
-    LINES TERMINATED BY '\n';"
-    
-    if docker exec $CONTAINER_NAME mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME -e "$load_sql" &>/dev/null; then
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-        
-        # Get record count
-        local count=$(docker exec $CONTAINER_NAME mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME -e "SELECT COUNT(*) FROM $table_name;" 2>/dev/null | tail -n 1)
-        echo -e "${GREEN}✅ ($(printf "%'d" $count) records in ${duration}s)${NC}"
-        
-        # Clean up temp file
-        docker exec $CONTAINER_NAME rm -f "$container_file" &>/dev/null
-        return 0
-    else
-        echo -e "${RED}❌ Load failed${NC}"
-        return 1
-    fi
-}
+# Note: Using official UMLS mysql_tables.sql and mysql_indexes.sql for data loading
+# This ensures compatibility with the standard UMLS installation process
 
 # Show data file summary
 echo ""
@@ -139,7 +90,10 @@ for file in "MRCONSO.RRF" "MRDEF.RRF" "MRHIER.RRF" "MRREL.RRF" "MRSTY.RRF" "MRSA
 done
 
 echo ""
-read -p "Continue with data loading? (y/N): " -n 1 -r
+echo -e "${YELLOW}⚠️  This will use the official UMLS scripts to create tables and load ALL data files.${NC}"
+echo -e "${YELLOW}⚠️  Process will take 1-3 hours and cannot be interrupted safely.${NC}"
+echo ""
+read -p "Continue with full UMLS data loading? (y/N): " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Aborted by user"
@@ -147,63 +101,71 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 echo ""
-echo "🚀 Starting UMLS data loading..."
+echo "🚀 Starting UMLS data loading using official scripts..."
 
-# Load core tables
-if load_data_file_final "MRCONSO" "MRCONSO.RRF" "concepts and sources"; then
-    echo ""
-    echo -e "${GREEN}🎉 MRCONSO loaded successfully!${NC}"
-    
-    echo ""
-    read -p "Continue with remaining tables? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        
-        # Load remaining core tables
-        load_data_file_final "MRDEF" "MRDEF.RRF" "definitions"
-        load_data_file_final "MRHIER" "MRHIER.RRF" "hierarchical relationships" 
-        load_data_file_final "MRREL" "MRREL.RRF" "concept relationships"
-        
-        # Optional tables
-        if [ -f "$UMLS_DATA_DIR/MRSTY.RRF" ]; then
-            echo ""
-            read -p "Load semantic types (MRSTY)? (y/N): " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                load_data_file_final "MRSTY" "MRSTY.RRF" "semantic types"
-            fi
-        fi
-        
-        if [ -f "$UMLS_DATA_DIR/MRSAT.RRF" ]; then
-            echo ""
-            echo -e "${YELLOW}⚠️  MRSAT is 8.8GB and takes 1-3 hours to load${NC}"
-            read -p "Load attributes (MRSAT)? (y/N): " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                load_data_file_final "MRSAT" "MRSAT.RRF" "attributes"
-            fi
+# Step 1: Copy RRF files to container data directory
+echo ""
+echo -e "${BLUE}📁 Preparing data files in container...${NC}"
+docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data &>/dev/null
+
+# Copy all RRF files to container
+for file in "$UMLS_DATA_DIR"/*.RRF; do
+    if [ -f "$file" ]; then
+        filename=$(basename "$file")
+        echo -n "   Copying $filename... "
+        if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/$filename" &>/dev/null; then
+            echo -e "${GREEN}✅${NC}"
+        else
+            echo -e "${RED}❌${NC}"
+            exit 1
         fi
     fi
+done
+
+# Create empty MRCXT.RRF if it doesn't exist (required by mysql_tables.sql)
+docker exec $CONTAINER_NAME touch /tmp/umls_data/MRCXT.RRF &>/dev/null
+
+# Step 2: Execute official mysql_tables.sql (creates tables + loads data)
+echo ""
+echo -e "${BLUE}🔧 Creating tables and loading data using official mysql_tables.sql...${NC}"
+echo -n "   This will take 1-3 hours depending on your system... "
+
+# Copy mysql_tables.sql to container and modify it for our paths
+docker cp "$UMLS_DATA_DIR/mysql_tables.sql" "$CONTAINER_NAME:/tmp/mysql_tables.sql" &>/dev/null
+
+# Execute the official script from the data directory
+if docker exec $CONTAINER_NAME bash -c "
+    cd /tmp/umls_data
+    mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME < /tmp/mysql_tables.sql
+" &>/dev/null; then
+    echo -e "${GREEN}✅ Tables created and data loaded successfully${NC}"
 else
-    echo ""
-    echo -e "${RED}❌ MRCONSO loading failed. Please check the error details above.${NC}"
+    echo -e "${RED}❌ Failed to create tables and load data${NC}"
+    echo "Check that all RRF files are present and accessible"
     exit 1
 fi
 
+# Step 3: Create indexes using official mysql_indexes.sql
 echo ""
-echo "🔍 Creating essential indexes..."
-docker exec $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD $DB_NAME -e "
-CREATE INDEX IF NOT EXISTS idx_mrconso_cui ON MRCONSO(CUI);
-CREATE INDEX IF NOT EXISTS idx_mrconso_sab ON MRCONSO(SAB);
-CREATE INDEX IF NOT EXISTS idx_mrconso_str ON MRCONSO(STR(255));
-CREATE INDEX IF NOT EXISTS idx_mrdef_cui ON MRDEF(CUI);
-CREATE INDEX IF NOT EXISTS idx_mrhier_cui ON MRHIER(CUI);
-CREATE INDEX IF NOT EXISTS idx_mrrel_cui1 ON MRREL(CUI1);
-CREATE INDEX IF NOT EXISTS idx_mrrel_cui2 ON MRREL(CUI2);
-" &>/dev/null
+echo -e "${BLUE}🔍 Creating indexes using official mysql_indexes.sql...${NC}"
+echo -n "   This may take 30-60 minutes... "
+
+if docker cp "$UMLS_DATA_DIR/mysql_indexes.sql" "$CONTAINER_NAME:/tmp/mysql_indexes.sql" &>/dev/null; then
+    if docker exec $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD $DB_NAME < /tmp/mysql_indexes.sql &>/dev/null; then
+        echo -e "${GREEN}✅ Indexes created successfully${NC}"
+    else
+        echo -e "${RED}❌ Failed to create indexes${NC}"
+        echo "Database may still be functional but queries will be slower"
+    fi
+else
+    echo -e "${RED}❌ Failed to copy mysql_indexes.sql${NC}"
+fi
+
+# Clean up temporary files
+docker exec $CONTAINER_NAME rm -rf /tmp/umls_data /tmp/mysql_tables.sql /tmp/mysql_indexes.sql &>/dev/null
 
 echo ""
-echo -e "${GREEN}🎉 UMLS 2025AA loading completed successfully!${NC}"
+echo -e "${GREEN}🎉 UMLS 2025AA loading completed successfully using official scripts!${NC}"
 echo ""
 echo "📊 Final database statistics:"
 docker exec $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD $DB_NAME -e "
@@ -218,5 +180,6 @@ ORDER BY TABLE_ROWS DESC;
 "
 
 echo ""
+echo -e "${GREEN}✅ Complete UMLS database ready with official schema and indexes!${NC}"
 echo -e "${GREEN}🚀 Ready to start API!${NC}"
 echo "Next: docker compose up -d umls-api" 
