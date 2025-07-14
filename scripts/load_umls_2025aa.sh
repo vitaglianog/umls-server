@@ -181,5 +181,31 @@ ORDER BY TABLE_ROWS DESC;
 
 echo ""
 echo -e "${GREEN}✅ Complete UMLS database ready with official schema and indexes!${NC}"
+echo ""
+
+# Optional optimization step
+echo -e "${BLUE}🔍 Optional: API Performance Optimization${NC}"
+echo "Would you like to run additional API-focused optimizations?"
+echo "This will create extra indices to improve query performance for the API."
+echo "• Adds non-duplicate indices optimized for API queries"
+echo "• Takes 5-15 minutes additional time"
+echo "• Recommended for production use"
+echo ""
+read -p "Run API optimizations now? (y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    echo -e "${BLUE}🚀 Running API optimizations...${NC}"
+    if ./scripts/run_optimization.sh --from-load-script; then
+        echo -e "${GREEN}✅ API optimizations completed successfully!${NC}"
+    else
+        echo -e "${YELLOW}⚠️  API optimizations failed, but database is still functional${NC}"
+        echo "You can run optimizations later with: ./scripts/run_optimization.sh"
+    fi
+else
+    echo "Skipping optimizations. You can run them later with: ./scripts/run_optimization.sh"
+fi
+
+echo ""
 echo -e "${GREEN}🚀 Ready to start API!${NC}"
 echo "Next: docker compose up -d umls-api" 

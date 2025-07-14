@@ -31,7 +31,7 @@ A two-tier architecture for providing natural language access to the Unified Med
 4. **Start Services**:
    ```bash
    docker compose up -d mysql
-   # Load UMLS data (see detailed instructions below)
+   # Load UMLS data with optional API optimizations (see detailed instructions below)
    ./scripts/load_umls_2025aa.sh
    docker compose up -d
    ```
@@ -171,13 +171,11 @@ Expected loading times on modern hardware:
 | Phase | Duration | Disk Usage |
 |-------|----------|------------|
 | **Setup** | 5 min | +1GB |
-| **MRCONSO** | 30-60 min | +15GB |
-| **MRDEF** | 5-10 min | +3GB |
-| **MRHIER** | 60-120 min | +25GB |
-| **MRREL** | 90-180 min | +30GB |
-| **Indexes** | 30-60 min | +15GB |
+| **Data Loading** | 1-3 hours | +25GB |
+| **Official Indexes** | 30-60 min | +15GB |
 | **Cleanup** | 10 min | -20GB |
-| **Total** | 3-7 hours | 30-40GB final |
+| **API Optimizations** | 5-15 min (optional) | +1GB |
+| **Total** | 2-5 hours | 30-40GB final |
 
 ## 📥 Loading UMLS Data (Detailed Instructions)
 
@@ -226,12 +224,15 @@ Run the loading script:
 ```
 
 This script will:
-- Create the necessary UMLS table structures
+- Create the necessary UMLS table structures using official UMLS scripts
 - Load data from .RRF files with progress tracking
 - Create optimized indexes for API performance
 - Verify the data load with statistics
+- **Optionally prompt for API performance optimizations** (recommended)
 
-**Note**: Loading can take 3-7 hours depending on your hardware and data size.
+The script will ask if you want to run additional API-focused optimizations at the end. These create extra indices that improve query performance for the API endpoints.
+
+**Note**: Loading can take 3-7 hours depending on your hardware and data size. Optional optimizations add 5-15 minutes.
 
 ## 🏗 Architecture
 
@@ -366,6 +367,9 @@ docker compose logs -f umls-api
 # Connect to MySQL
 docker exec -it umls-mysql mysql -u umls_user -p umls
 
+# Run API performance optimizations (if not done during initial load)
+./scripts/run_optimization.sh
+
 # Backup database
 docker exec umls-mysql mysqldump -u umls_user -p umls > umls_backup.sql
 
@@ -415,7 +419,8 @@ docker exec umls-api env | grep DB_
 ### Performance Issues
 
 **Slow queries:**
-- Ensure indexes are created (run the load script)
+- Ensure indexes are created (run the load script with optimizations)
+- Run additional API optimizations: `./scripts/run_optimization.sh`
 - Increase MySQL buffer pool size in docker-compose.yml
 - Monitor with: `docker stats`
 
@@ -639,10 +644,11 @@ sudo systemctl start umls-api
 ## 📝 Next Steps
 
 1. **Configure Claude Desktop**: Update your `claude_desktop_config.json` to use `http://localhost:8000`
-2. **Load Additional Ontologies**: Customize the loading script for specific vocabularies
-3. **Set Up Monitoring**: Add health checks and monitoring
-4. **Backup Strategy**: Implement regular database backups
-5. **Scale**: Consider read replicas for high-traffic scenarios
+2. **Performance Optimization**: If you skipped optimizations during loading, run `./scripts/run_optimization.sh`
+3. **Load Additional Ontologies**: Customize the loading script for specific vocabularies
+4. **Set Up Monitoring**: Add health checks and monitoring
+5. **Backup Strategy**: Implement regular database backups
+6. **Scale**: Consider read replicas for high-traffic scenarios
 
 ## 🤝 Contributing
 
