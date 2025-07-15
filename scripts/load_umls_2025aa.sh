@@ -2,6 +2,7 @@
 
 # UMLS 2025AA Data Loading Script using Official UMLS Scripts
 # Uses official mysql_tables.sql and mysql_indexes.sql for standard compliance
+# Automatically handles @LINE_TERMINATION@ placeholder replacement
 
 set -e
 
@@ -130,8 +131,14 @@ echo ""
 echo -e "${BLUE}🔧 Creating tables and loading data using official mysql_tables.sql...${NC}"
 echo -n "   This will take 1-3 hours depending on your system... "
 
-# Copy mysql_tables.sql to container and modify it for our paths
-docker cp "$UMLS_DATA_DIR/mysql_tables.sql" "$CONTAINER_NAME:/tmp/mysql_tables.sql" &>/dev/null
+# Copy mysql_tables.sql to container and preprocess it
+docker cp "$UMLS_DATA_DIR/mysql_tables.sql" "$CONTAINER_NAME:/tmp/mysql_tables_original.sql" &>/dev/null
+
+# Preprocess the SQL file to replace @LINE_TERMINATION@ with actual line termination
+docker exec $CONTAINER_NAME bash -c "
+    sed 's/@LINE_TERMINATION@/\"\\\\n\"/g' /tmp/mysql_tables_original.sql > /tmp/mysql_tables.sql
+    rm /tmp/mysql_tables_original.sql
+" &>/dev/null
 
 # Execute the official script from the data directory
 if docker exec $CONTAINER_NAME bash -c "
@@ -141,7 +148,19 @@ if docker exec $CONTAINER_NAME bash -c "
     echo -e "${GREEN}✅ Tables created and data loaded successfully${NC}"
 else
     echo -e "${RED}❌ Failed to create tables and load data${NC}"
-    echo "Check that all RRF files are present and accessible"
+    echo ""
+    echo "Troubleshooting tips:"
+    echo "1. Check that all RRF files are present and accessible"
+    echo "2. Verify MySQL has sufficient disk space"
+    echo "3. Check the last few lines of the error:"
+    echo ""
+    # Show last few lines of error for debugging
+    docker exec $CONTAINER_NAME bash -c "
+        cd /tmp/umls_data
+        mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME < /tmp/mysql_tables.sql
+    " 2>&1 | tail -10
+    echo ""
+    echo "If you see '@LINE_TERMINATION@' errors, the script has been updated to handle this."
     exit 1
 fi
 
