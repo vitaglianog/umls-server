@@ -9,23 +9,38 @@ async def get_codes_from_natural_language(natural_language_query):
         r = await client.get(f"{BASE}/cuis", params={"query": natural_language_query})
         r.raise_for_status()
         matches = r.json()
-        result = [m for m in matches["cuis"] if m["language_code"] == "ENG"][0]
-        print(result)
+        results = [m for m in matches["cuis"] if m["language_code"] == "ENG"]
 
-        r = await client.get(f"{BASE}/code-map/", params={"cui": result['cui']})
-        r.raise_for_status()
-        matches = r.json()['code_maps']
-        snomed_list = [m for m in matches if m["sab"] == "SNOMEDCT_US"]
-        snomed_code = snomed_list[0]['code'] if snomed_list else "N/A"
-        billing_list = [m["code"] for m in matches if m["sab"] == "ICD10CM"]
-        billing_code = billing_list[0] if billing_list else "N/A"
-        # result = [m for m in matches if m["ontology"] == "SNOMEDCT_US"][0]
-        return {
-            "cui": result['cui'],
-            "snomed_code": snomed_code,
-            "billing_code": billing_code,
-            "name": result['name']
-        }
+        codes = {m['cui']: m for m in results}
+        snomed_codes = {}
+        billing_codes = {}
+        for key, cui in codes.items():
+            r = await client.get(f"{BASE}/code-map/", params={"cui": key})
+            r.raise_for_status()
+            matches = r.json()['code_maps']
+            for m in matches:
+                if m['sab'] == 'SNOMEDCT_US':
+                    snomed_codes[key] = m
+                    codes[key]['snomed'] = m
+                elif m['sab'] == 'ICD10CM':
+                    billing_codes[key] = m
+                    codes[key]['icd10m'] = m
+            
+        # Retain only CUI codes that have both SNOMED and ICD10CM codes
+        return_codes = []
+        for key in list(codes.keys()):
+            if key in snomed_codes and key in billing_codes:
+                return_codes.append({
+                    "cui": key,
+                    "cui_name": codes[key]['name'],
+                    "snomed_code": snomed_codes[key]['code'],
+                    "snomed_name": snomed_codes[key]['name'],
+                    "icd10cm_code": billing_codes[key]['code'],
+                    "icd10cm_name": billing_codes[key]['name']
+                })
+
+        return return_codes
+    
 
 
 # Write a function to get the ICDM10CM code from a SNOMED code
@@ -35,14 +50,16 @@ async def get_icd10cm_from_snomed(snomed_code):
         r.raise_for_status()
         return r.json()
 
-# snomed_code = "363455001"  # Example SNOMED code for diabetes
-nl_query = "malignant neoplasm of adrenal gland"  # Example natural language query for lung cancer
-print(f"Getting SNOMED code from natural language query: {nl_query}...")
-x = asyncio.run(get_codes_from_natural_language(nl_query))  # Replace with actual SNOMED code
-print(x)
 
-snomed_code = x['snomed_code']
-print(f"Getting ICD10CM codes for SNOMED code: {snomed_code}...")
-icd10cm_result = asyncio.run(get_icd10cm_from_snomed(snomed_code))
-print(f"ICD10CM codes for SNOMED code {snomed_code}:")
-print(json.dumps(icd10cm_result, indent=2))
+# Example usage:
+
+# snomed_code = "363455001"  # Example SNOMED code for diabetes
+nl_query = "pleural effusion"  # Example natural language query for lung cancer
+x = asyncio.run(get_codes_from_natural_language(nl_query))  # Replace with actual SNOMED code
+
+print(f"Getting codes from natural language query: {nl_query}...")
+for disease in x:
+    print("CUI name:", disease['cui_name'])
+    print("\tSNOMED code:", disease['snomed_code'])
+    print("\tICD10CM code:", disease['icd10cm_code'])
+    print()
