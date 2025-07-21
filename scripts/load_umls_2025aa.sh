@@ -108,6 +108,7 @@ echo "🚀 Starting UMLS data loading using official scripts..."
 echo ""
 echo -e "${BLUE}📁 Preparing data files in container...${NC}"
 docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data &>/dev/null
+docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data/CHANGE &>/dev/null
 
 # Copy all RRF files to container
 for file in "$UMLS_DATA_DIR"/*.RRF; do
@@ -115,6 +116,20 @@ for file in "$UMLS_DATA_DIR"/*.RRF; do
         filename=$(basename "$file")
         echo -n "   Copying $filename... "
         if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/$filename" &>/dev/null; then
+            echo -e "${GREEN}✅${NC}"
+        else
+            echo -e "${RED}❌${NC}"
+            exit 1
+        fi
+    fi
+done
+
+# Copy all CHANGE files to container
+for file in "$UMLS_DATA_DIR"/CHANGE/*.RRF; do
+    if [ -f "$file" ]; then
+        filename=$(basename "$file")
+        echo -n "   Copying CHANGE/$filename... "
+        if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/CHANGE/$filename"; then
             echo -e "${GREEN}✅${NC}"
         else
             echo -e "${RED}❌${NC}"
@@ -140,11 +155,12 @@ docker exec $CONTAINER_NAME bash -c "
     rm /tmp/mysql_tables_original.sql
 " &>/dev/null
 
+echo $CONTAINER_NAME
 # Execute the official script from the data directory
 if docker exec $CONTAINER_NAME bash -c "
     cd /tmp/umls_data
     mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME < /tmp/mysql_tables.sql
-" &>/dev/null; then
+"; then
     echo -e "${GREEN}✅ Tables created and data loaded successfully${NC}"
 else
     echo -e "${RED}❌ Failed to create tables and load data${NC}"

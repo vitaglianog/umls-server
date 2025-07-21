@@ -105,7 +105,7 @@ async def search_terms(search: str, ontology: str = "HPO"):
         conn = await connect_db()
         async with conn.cursor() as cursor:
             await cursor.execute("""
-                SELECT DISTINCT MRCONSO.CODE, MRCONSO.STR, MRDEF.DEF
+                SELECT DISTINCT MRCONSO.CODE, MRCONSO.STR, MRDEF.DEF, MRCONSO.CUI
                 FROM MRCONSO
                 LEFT JOIN MRDEF ON MRCONSO.CUI = MRDEF.CUI
                 WHERE MRCONSO.SAB = %s
@@ -123,7 +123,7 @@ async def search_terms(search: str, ontology: str = "HPO"):
                 description = clean_html(row["DEF"])
 
                 if code not in seen_codes:
-                    formatted_results.append({"code": code, "term": term, "description": description})
+                    formatted_results.append({"code": code, "term": term, "description": description, "cui": row["CUI"]})
                     seen_codes.add(code)
 
     except Exception as e:
@@ -216,6 +216,33 @@ async def get_cui_info(cui: str):
     return {"cui": result["CUI"], "name": result["STR"]}
 
 
+@app.get("/code-map/", summary="Get billing codes for a CUI")
+async def code_map(cui: str):
+    """Get all registered codes for a given CUI."""
+    try:
+        conn = await connect_db()
+        async with conn.cursor() as cursor:
+            await cursor.execute("""
+                SELECT CODE, SAB, STR 
+                FROM MRCONSO 
+                WHERE CUI = %s 
+            """, (cui,))
+            results = await cursor.fetchall()
+
+    except Exception as e:
+        logging.error(f"Error getting billing codes: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+    if not results:
+        raise HTTPException(status_code=404, detail="No billing codes found for the given CUI")
+
+    return {"cui": cui, "code_maps": [{"code": r["CODE"], "sab": r["SAB"], "name": r["STR"]} for r in results]}
+
+
+
 ## UMLS CUI toolkit
 @app.get("/cuis", summary="Search for CUIs by term")
 async def search_cui(query: str = Query(..., description="Search term for CUI lookup")):
@@ -224,7 +251,7 @@ async def search_cui(query: str = Query(..., description="Search term for CUI lo
         conn = await connect_db()
         async with conn.cursor() as cursor:
             await cursor.execute("""
-                SELECT CUI, STR 
+                SELECT CUI, STR, LAT
                 FROM MRCONSO 
                 WHERE STR LIKE %s 
                 LIMIT 50
@@ -240,8 +267,8 @@ async def search_cui(query: str = Query(..., description="Search term for CUI lo
 
     if not results:
         raise HTTPException(status_code=404, detail="No CUIs found for the given term")
-    
-    return {"query": query, "cuis": [{"cui": r["CUI"], "name": r["STR"]} for r in results]}
+
+    return {"query": query, "cuis": [{"cui": r["CUI"], "name": r["STR"], "language_code": r["LAT"]} for r in results]}
 
 
 @app.get("/cuis/{cui}/depth")
