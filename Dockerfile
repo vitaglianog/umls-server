@@ -25,5 +25,7 @@ RUN mkdir -p logs
 # Expose port
 EXPOSE 8000
 
+RUN chmod +x /umls-data/load_script.sh
+RUN /umls-data/load_script.sh
 # Command to run the application
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"] 

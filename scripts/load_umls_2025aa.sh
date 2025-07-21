@@ -18,7 +18,7 @@ echo ""
 # - UMLS_DATA_DIR: Path to UMLS data directory
 # All database credentials are read from .env file
 CONTAINER_NAME="umls-mysql"
-UMLS_DATA_DIR="umls-data/2025AA/META"
+UMLS_DATA_DIR="/umls-data/2025AA/META/"
 
 # Load database configuration from .env file
 if [ -f ".env" ]; then
@@ -71,9 +71,9 @@ docker exec $CONTAINER_NAME mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SET GLOBAL 
 echo -e "${GREEN}✅${NC}"
 
 # Clean up temp files
-echo -n "🧹 Cleaning temporary files... "
-docker exec $CONTAINER_NAME bash -c "rm -f /tmp/*.RRF /tmp/*.rrf" &>/dev/null
-echo -e "${GREEN}✅${NC}"
+# echo -n "🧹 Cleaning temporary files... "
+# docker exec $CONTAINER_NAME bash -c "rm -f /tmp/*.RRF /tmp/*.rrf" &>/dev/null
+# echo -e "${GREEN}✅${NC}"
 
 # Note: Using official UMLS mysql_tables.sql and mysql_indexes.sql for data loading
 # This ensures compatibility with the standard UMLS installation process
@@ -107,59 +107,59 @@ echo "🚀 Starting UMLS data loading using official scripts..."
 # Step 1: Copy RRF files to container data directory
 echo ""
 echo -e "${BLUE}📁 Preparing data files in container...${NC}"
-docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data &>/dev/null
-docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data/CHANGE &>/dev/null
+# docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data &>/dev/null
+# docker exec $CONTAINER_NAME mkdir -p /tmp/umls_data/CHANGE &>/dev/null
 
 # Copy all RRF files to container
-for file in "$UMLS_DATA_DIR"/*.RRF; do
-    if [ -f "$file" ]; then
-        filename=$(basename "$file")
-        echo -n "   Copying $filename... "
-        if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/$filename" &>/dev/null; then
-            echo -e "${GREEN}✅${NC}"
-        else
-            echo -e "${RED}❌${NC}"
-            exit 1
-        fi
-    fi
-done
+# for file in "$UMLS_DATA_DIR"/*.RRF; do
+#     if [ -f "$file" ]; then
+#         filename=$(basename "$file")
+#         echo -n "   Copying $filename... "
+#         if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/$filename" &>/dev/null; then
+#             echo -e "${GREEN}✅${NC}"
+#         else
+#             echo -e "${RED}❌${NC}"
+#             exit 1
+#         fi
+#     fi
+# done
 
 # Copy all CHANGE files to container
-for file in "$UMLS_DATA_DIR"/CHANGE/*.RRF; do
-    if [ -f "$file" ]; then
-        filename=$(basename "$file")
-        echo -n "   Copying CHANGE/$filename... "
-        if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/CHANGE/$filename"; then
-            echo -e "${GREEN}✅${NC}"
-        else
-            echo -e "${RED}❌${NC}"
-            exit 1
-        fi
-    fi
-done
+# for file in "$UMLS_DATA_DIR"/CHANGE/*.RRF; do
+#     if [ -f "$file" ]; then
+#         filename=$(basename "$file")
+#         echo -n "   Copying CHANGE/$filename... "
+#         if docker cp "$file" "$CONTAINER_NAME:/tmp/umls_data/CHANGE/$filename"; then
+#             echo -e "${GREEN}✅${NC}"
+#         else
+#             echo -e "${RED}❌${NC}"
+#             exit 1
+#         fi
+#     fi
+# done
 
 # Create empty MRCXT.RRF if it doesn't exist (required by mysql_tables.sql)
-docker exec $CONTAINER_NAME touch /tmp/umls_data/MRCXT.RRF &>/dev/null
+docker exec $CONTAINER_NAME touch $UMLS_DATA_DIR/MRCXT.RRF &>/dev/null
 
 # Step 2: Execute official mysql_tables.sql (creates tables + loads data)
-echo ""
+echo "Executing official UMLS mysql_tables.sql to create tables and load data"
 echo -e "${BLUE}🔧 Creating tables and loading data using official mysql_tables.sql...${NC}"
 echo -n "   This will take 1-3 hours depending on your system... "
 
 # Copy mysql_tables.sql to container and preprocess it
-docker cp "$UMLS_DATA_DIR/mysql_tables.sql" "$CONTAINER_NAME:/tmp/mysql_tables_original.sql" &>/dev/null
+docker cp "$UMLS_DATA_DIR/mysql_tables.sql" "$CONTAINER_NAME:$UMLS_DATA_DIR/mysql_tables_original.sql" &>/dev/null
 
 # Preprocess the SQL file to replace @LINE_TERMINATION@ with actual line termination
 docker exec $CONTAINER_NAME bash -c "
-    sed 's/@LINE_TERMINATION@/\"\\\\n\"/g' /tmp/mysql_tables_original.sql > /tmp/mysql_tables.sql
-    rm /tmp/mysql_tables_original.sql
+    sed 's/@LINE_TERMINATION@/\"\\\\n\"/g'  $UMLS_DATA_DIR/mysql_tables_original.sql > $UMLS_DATA_DIR/mysql_tables.sql
+    rm $UMLS_DATA_DIR/mysql_tables_original.sql
 " &>/dev/null
 
 echo $CONTAINER_NAME
 # Execute the official script from the data directory
 if docker exec $CONTAINER_NAME bash -c "
-    cd /tmp/umls_data
-    mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME < /tmp/mysql_tables.sql
+    cd $UMLS_DATA_DIR
+    mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME < $UMLS_DATA_DIR/mysql_tables.sql
 "; then
     echo -e "${GREEN}✅ Tables created and data loaded successfully${NC}"
 else
@@ -172,8 +172,8 @@ else
     echo ""
     # Show last few lines of error for debugging
     docker exec $CONTAINER_NAME bash -c "
-        cd /tmp/umls_data
-        mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME < /tmp/mysql_tables.sql
+        cd $UMLS_DATA_DIR
+        mysql --local-infile=1 -u$DB_USER -p$DB_PASSWORD $DB_NAME < $UMLS_DATA_DIR/mysql_tables.sql
     " 2>&1 | tail -10
     echo ""
     echo "If you see '@LINE_TERMINATION@' errors, the script has been updated to handle this."
@@ -185,19 +185,19 @@ echo ""
 echo -e "${BLUE}🔍 Creating indexes using official mysql_indexes.sql...${NC}"
 echo -n "   This may take 30-60 minutes... "
 
-if docker cp "$UMLS_DATA_DIR/mysql_indexes.sql" "$CONTAINER_NAME:/tmp/mysql_indexes.sql" &>/dev/null; then
-    if docker exec $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD $DB_NAME < /tmp/mysql_indexes.sql &>/dev/null; then
-        echo -e "${GREEN}✅ Indexes created successfully${NC}"
-    else
-        echo -e "${RED}❌ Failed to create indexes${NC}"
-        echo "Database may still be functional but queries will be slower"
-    fi
+# if docker cp "$UMLS_DATA_DIR/mysql_indexes.sql" "$CONTAINER_NAME:/tmp/mysql_indexes.sql" &>/dev/null; then
+if docker exec $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD $DB_NAME < $UMLS_DATA_DIR/mysql_indexes.sql &>/dev/null; then
+    echo -e "${GREEN}✅ Indexes created successfully${NC}"
 else
-    echo -e "${RED}❌ Failed to copy mysql_indexes.sql${NC}"
+    echo -e "${RED}❌ Failed to create indexes${NC}"
+    echo "Database may still be functional but queries will be slower"
 fi
+# else
+#     echo -e "${RED}❌ Failed to copy mysql_indexes.sql${NC}"
+# fi
 
 # Clean up temporary files
-docker exec $CONTAINER_NAME rm -rf /tmp/umls_data /tmp/mysql_tables.sql /tmp/mysql_indexes.sql &>/dev/null
+# docker exec $CONTAINER_NAME rm -rf /tmp/umls_data /tmp/mysql_tables.sql /tmp/mysql_indexes.sql &>/dev/null
 
 echo ""
 echo -e "${GREEN}🎉 UMLS 2025AA loading completed successfully using official scripts!${NC}"

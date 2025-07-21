@@ -242,6 +242,60 @@ async def code_map(cui: str):
     return {"cui": cui, "code_maps": [{"code": r["CODE"], "sab": r["SAB"], "name": r["STR"]} for r in results]}
 
 
+@app.get("/snomed_to_icd10cm", summary="Translate SNOMED-CT code to ICD10CM codes")
+async def snomed_to_icd10cm(code: str):
+    """
+    Given a SNOMED-CT code, retrieve mapped ICD10CM codes using shared CUI.
+    """
+    try:
+        conn = await connect_db()
+        async with conn.cursor() as cursor:
+            # Step 1: Get the CUI for the SNOMED-CT code
+            await cursor.execute("""
+                SELECT CUI
+                FROM MRCONSO
+                WHERE CODE = %s AND SAB = 'SNOMEDCT_US'
+                LIMIT 1;
+            """, (code,))
+            cui_row = await cursor.fetchone()
+
+            if not cui_row:
+                return {
+                        "snomed_code": code,
+                        "cui": "No CUI found",
+                        "icd10cm_mappings": []
+                    }
+
+            cui = cui_row["CUI"]
+
+            # Step 2: Get ICD10CM codes that share the same CUI
+            await cursor.execute("""
+                SELECT DISTINCT CODE, STR
+                FROM MRCONSO
+                WHERE CUI = %s AND SAB = 'ICD10CM'
+            """, (cui,))
+            icd_results = await cursor.fetchall()
+
+            if not icd_results:
+                return {
+                        "snomed_code": code,
+                        "cui": cui,
+                        "icd10cm_mappings": ["No ICD10CM mappings found"]
+                    }
+
+            return {
+                "snomed_code": code,
+                "cui": cui,
+                "icd10cm_mappings": [{"code": r["CODE"], "description": r["STR"]} for r in icd_results]
+            }
+
+    except Exception as e:
+        logging.error(f"Error mapping SNOMED to ICD10CM: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 
 ## UMLS CUI toolkit
 @app.get("/cuis", summary="Search for CUIs by term")
